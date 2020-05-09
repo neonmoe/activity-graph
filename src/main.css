@@ -1,3 +1,8 @@
+html {
+    background-color: #fff;
+    color: #444;
+}
+
 .activity-table {
     width: auto;
     margin: auto;
@@ -6,17 +11,51 @@
 
 .activity-header-year {
     text-align: center;
-    font-family: monospace;
+    font-family: "Consolas";
 }
 
-.activity-blob {
+.blob {
+    background-color: #fff;
     width: 8px;
     height: 8px;
-    border: solid #AAA 1px;
+    border: solid #888 1px;
+    transition: border-color 0.2s;
 }
 
-.activity-level-0 { background-color: rgb(255, 255, 255); }
-.activity-level-1 { background-color: rgb(255, 255, 192); }
-.activity-level-2 { background-color: rgb(255, 255, 128); }
-.activity-level-3 { background-color: rgb(255, 255, 64); }
-.activity-level-4 { background-color: rgb(255, 255, 0); }
+.blob:hover {
+    border-color: #222;
+}
+
+.lvl0 { background-color: #fff; }
+.lvl1 { background-color: #e1e1f7; }
+.lvl2 { background-color: #c3c3ef; }
+.lvl3 { background-color: #a5a5e7; }
+.lvl4 { background-color: #8888de; }
+
+@media (prefers-reduced-motion: reduce) {
+    .activity-blob {
+	transition: border-color 0s;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    html {
+	background-color: #333;
+	color: #ccc;
+    }
+
+    .blob {
+	background-color: #393939;
+	border-color: #555;
+    }
+
+    .blob:hover {
+	border-color: #999;
+    }
+
+    .lvl0 { background-color: #393939; }
+    .lvl1 { background-color: #4f4f60; }
+    .lvl2 { background-color: #656586; }
+    .lvl3 { background-color: #7e7ea8; }
+    .lvl4 { background-color: #9798c5; }
+}

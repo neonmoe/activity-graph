@@ -1,22 +1,16 @@
-// TODO: Link the individual squares to some anchor which should then display a small summary of what commits that day contained
-// TOOD: A --host flag that allows, hosting a http server that returns the generated html
-
 use chrono::{DateTime, Datelike, Utc};
 use rayon::prelude::*;
 use structopt::StructOpt;
 
 use std::collections::HashSet;
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time;
 
-static HTML_HEAD: &str =
-    "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Activity</title></head><body>";
-static HTML_TAIL: &str = "</body>";
 static CSS: &str = include_str!("main.css");
 
 #[derive(Clone)]
@@ -42,25 +36,38 @@ struct Args {
     /// output file is not specified
     #[structopt(short, long)]
     stdout: bool,
-    /// How many subdirectories deep the program should search (if not specified, there is no limit)
+
+    /// Regex that matches the author(s) whose commits are being
+    /// counted (if not set, all commits will be accounted for)
+    #[structopt(short, long)]
+    author: Option<String>,
+    /// How many subdirectories deep the program should search (if not
+    /// set, there is no limit)
     #[structopt(short, long)]
     depth: Option<i32>,
-    /// Regex that matches the author(s) whose commits are being
-    /// counted
-    #[structopt(short, long)]
-    author: String,
     /// The file that the resulting html will be printed out to
     #[structopt(short, long)]
     output: Option<PathBuf>,
     /// The file that the stylesheet will be printed out to (if not
-    /// provided, it will be included in the html inside a
-    /// style-element)
+    /// set, it will be included in the html inside a style-element)
     #[structopt(short, long)]
     css: Option<PathBuf>,
     /// Path(s) to the directory (or directories) containing the
     /// repositories you want to include
     #[structopt(short, long)]
     repos: Vec<PathBuf>,
+
+    /// A html file that will be pasted in the <head> element
+    #[structopt(long)]
+    external_head: Option<PathBuf>,
+    /// A html file that will be pasted at the beginning of the <body>
+    /// element
+    #[structopt(long)]
+    external_header: Option<PathBuf>,
+    /// A html file that will be pasted at the end of the <body>
+    /// element
+    #[structopt(long)]
+    external_footer: Option<PathBuf>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -121,6 +128,38 @@ fn main() {
         }
     };
 
+    // Load the head, header and footer files, and create the site's
+    // html templates.
+
+    let external_head = read_optional_file(&args.external_head).unwrap_or_else(String::new);
+    let external_header = read_optional_file(&args.external_header).unwrap_or_else(String::new);
+    let external_footer = read_optional_file(&args.external_footer).unwrap_or_else(String::new);
+
+    let mut style = None;
+    if let (Some(css_path), Some(output_path)) = (&args.css, &args.output) {
+        if let Some(base) = output_path.parent() {
+            if let Some(relative_path) = pathdiff::diff_paths(&css_path, base) {
+                // Add the <link> element instead of <style> if using external css
+                let path = create_web_path(relative_path);
+                style = Some(format!("<link href=\"{}\" rel=\"stylesheet\">", path));
+            }
+        }
+    }
+    if style.is_none() {
+        style = Some(format!("<style>{}</style>", CSS));
+    }
+    let style = style.unwrap();
+
+    let html_head = format!(
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>Activity</title>\n{}\n{}\n</head>\n<body>\n{}\n",
+        style,
+        external_head,
+        external_header
+    );
+    let html_tail = format!("{}</body></html>", external_footer);
+
+    // Start actually processing the repositories
+
     for repo_dir in &args.repos {
         match fs::read_dir(&repo_dir) {
             Ok(subdirs) => {
@@ -130,15 +169,21 @@ fn main() {
                 verbose_println("finished scanning for git repositories", false);
 
                 let commit_count = AtomicU32::new(0);
-                let author = format!("--author={}", args.author);
+                let author_flag = args
+                    .author
+                    .as_ref()
+                    .map(|author| format!("--author={}", author));
                 let mut commit_dates = repos
                     .par_iter()
                     // Collect the metadata of each commit in the repositories
                     .map(|repo| {
                         let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
                         let path = &repo.path;
-                        let commits =
-                            run_git(&path, &["log", "--all", "--format=oneline", &author]);
+                        let mut args = vec!["log", "--all", "--format=oneline"];
+                        if let Some(author_flag) = &author_flag {
+                            args.push(author_flag);
+                        }
+                        let commits = run_git(&path, &args);
                         let lines: Vec<&str> = commits
                             .lines()
                             .filter_map(|line| line.split(' ').next())
@@ -252,22 +297,20 @@ fn main() {
                     }
                 }
 
-                if let Some(output_path) = &args.output {
-                    let mut output = File::create(output_path).map(|file| BufWriter::new(file));
-                    if let Ok(writer) = &mut output {
-                        let relative_path = args
-                            .css
-                            .as_ref()
-                            .and_then(|css_path| {
-                                if let Some(base) = output_path.parent() {
-                                    pathdiff::diff_paths(&css_path, base)
-                                } else {
-                                    Some(css_path.to_path_buf())
-                                }
-                            })
-                            .map(create_web_path);
-                        render_to_file(&years, weeks, relative_path, writer, &verbose_println);
-                    }
+                let mut output = args
+                    .output
+                    .as_ref()
+                    .and_then(|path| File::create(path).ok())
+                    .map(|file| BufWriter::new(file));
+                if let Some(writer) = &mut output {
+                    render_to_file(
+                        &years,
+                        weeks,
+                        &html_head,
+                        &html_tail,
+                        writer,
+                        &verbose_println,
+                    );
                 }
 
                 let mut css = args
@@ -313,6 +356,15 @@ fn create_web_path(path: PathBuf) -> String {
         })
 }
 
+fn read_optional_file(path: &Option<PathBuf>) -> Option<String> {
+    let path = path.as_ref()?;
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    let mut result = Vec::new();
+    reader.read_to_end(&mut result).ok()?;
+    String::from_utf8(result).ok()
+}
+
 fn get_max_count(year: &Year) -> usize {
     year.days
         .iter()
@@ -344,20 +396,13 @@ fn get_shaded_char(shade: f32) -> char {
 fn render_to_file<F: Fn(&str, bool)>(
     years: &[Year],
     weeks: usize,
-    css_path: Option<String>,
+    head: &str,
+    tail: &str,
     writer: &mut BufWriter<File>,
     verbose_println: &F,
 ) {
     verbose_println("writing html to file...", true);
 
-    let head = if let Some(css_path) = css_path {
-        HTML_HEAD.replace(
-            "</head>",
-            &format!("<link href=\"{}\" rel=\"stylesheet\"></head>", css_path),
-        )
-    } else {
-        HTML_HEAD.replace("</head>", &format!("<style>{}</style></head>", CSS))
-    };
     let _ = writeln!(writer, "{}", head);
 
     for year in years.iter().rev() {
@@ -371,18 +416,24 @@ fn render_to_file<F: Fn(&str, bool)>(
             let _ = writeln!(writer, "<tr>");
             for week in 0..weeks {
                 let metadata = &year.days[day * weeks + week];
-                let shade = get_shade_class(metadata.commits.len(), max_count);
+                let commit_count = metadata.commits.len();
+                let shade = get_shade_class(commit_count, max_count);
+                let tooltip = if commit_count == 0 {
+                    String::from("No commits")
+                } else {
+                    format!("{} commits", commit_count)
+                };
                 let _ = writeln!(
                     writer,
-                    "<td class=\"activity-blob activity-level-{}\"></td>",
-                    shade
+                    "<td class=\"blob lvl{}\" title=\"{}\"></td>",
+                    shade, tooltip
                 );
             }
             let _ = writeln!(writer, "</tr>");
         }
-        let _ = writeln!(writer, "</table></tbody>");
+        let _ = writeln!(writer, "</tbody></table>");
     }
-    let _ = writeln!(writer, "{}", HTML_TAIL);
+    let _ = writeln!(writer, "{}", tail);
     verbose_println("wrote html to file", false);
 }
 
