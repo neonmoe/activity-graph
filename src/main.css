@@ -1,0 +1,22 @@
+.activity-table {
+    width: auto;
+    margin: auto;
+    margin-bottom: 1em;
+}
+
+.activity-header-year {
+    text-align: center;
+    font-family: monospace;
+}
+
+.activity-blob {
+    width: 8px;
+    height: 8px;
+    border: solid #AAA 1px;
+}
+
+.activity-level-0 { background-color: rgb(255, 255, 255); }
+.activity-level-1 { background-color: rgb(255, 255, 192); }
+.activity-level-2 { background-color: rgb(255, 255, 128); }
+.activity-level-3 { background-color: rgb(255, 255, 64); }
+.activity-level-4 { background-color: rgb(255, 255, 0); }

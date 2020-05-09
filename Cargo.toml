@@ -3,10 +3,13 @@ name = "activity-graph"
 version = "0.1.0"
 authors = ["Jens Pitkanen <jens@neon.moe>"]
 edition = "2018"
+description = "Generates a visualization of your commit activity in a set of git repositories."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-argh = "0.1.3"
+structopt = "0.3.14"
 chrono = "0.4.11"
 rayon = "1.3.0"
+pathdiff = "0.2.0"
+term_size = "*" # structopt uses some version of term size
