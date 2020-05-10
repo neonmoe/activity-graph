@@ -11,7 +11,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time;
 
-static CSS: &str = include_str!("main.css");
+static HTML_HEAD: &str = include_str!("head.html");
+static CSS: &str = include_str!("activity-graph.css");
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ProjectMetadata {
@@ -128,6 +129,165 @@ fn main() {
         }
     };
 
+    // Find the repositories
+    let repos = args
+        .repos
+        .iter()
+        .map(|repo_dir| {
+            match fs::read_dir(&repo_dir) {
+                Ok(subdirs) => {
+                    // Find all the repository directories
+                    let mut repos = HashSet::new();
+                    analyze_dirs(&mut repos, &repo_dir, subdirs, args.depth, &verbose_println);
+                    repos
+                }
+                Err(err) => {
+                    eprintln!("error: cannot read directory ({})", err);
+                    HashSet::new()
+                }
+            }
+        })
+        .fold(HashSet::new(), |mut a, b| {
+            a.extend(b);
+            a
+        });
+    verbose_println("finished scanning for git repositories", false);
+
+    // Count up the commits in all of the repositories
+    let commit_count = AtomicU32::new(0);
+    let author_flag = args
+        .author
+        .as_ref()
+        .map(|author| format!("--author={}", author));
+    let mut commit_dates = repos
+        .par_iter()
+        // Collect the metadata of each commit in the repositories
+        .map(|repo| {
+            let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
+            let path = &repo.path;
+            let mut args = vec!["log", "--all", "--format=oneline"];
+            if let Some(author_flag) = &author_flag {
+                args.push(author_flag);
+            }
+            let commits = run_git(&path, &args);
+            let lines: Vec<&str> = commits
+                .lines()
+                .filter_map(|line| line.split(' ').next())
+                .collect();
+            commit_dates.par_extend(lines.par_iter().filter_map(|hash| {
+                let date = run_git(
+                    &path,
+                    &["show", "-s", "--format=%ai", "--date=iso8601", &hash],
+                );
+                if let Ok(date) = date.parse() {
+                    // Note: Chrono adheres to ISO 8601, and
+                    // that's what we ask from git, so this
+                    // should always be valid.
+                    let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    verbose_println(&format!("commits accounted for {}\r", count), true);
+                    Some((date, repo))
+                } else {
+                    None
+                }
+            }));
+            commit_dates
+        })
+        // Fold all the gathered dates into one vec
+        .reduce(
+            || Vec::new(),
+            |mut a, b| {
+                a.extend(&b);
+                a
+            },
+        );
+
+    verbose_println(
+        &format!(
+            "counted up {} commits in {} repositories",
+            commit_dates.len(),
+            repos.len()
+        ),
+        false,
+    );
+
+    // Sort the commits by date, and prepare to go through all of them
+    commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
+    let get_year = |date: DateTime<Utc>| date.date().iso_week().year();
+    let (no_commits, first_year, last_year) = if commit_dates.len() > 0 {
+        (
+            false,
+            get_year(commit_dates[0].0),
+            get_year(commit_dates[commit_dates.len() - 1].0),
+        )
+    } else {
+        // There are no commits, so it doesn't really matter what the years are.
+        (true, 2000, 2000)
+    };
+
+    // Since the graph is ISO week based, there might be 52 or
+    // 53 weeks per year. Might clip off the last year during
+    // leap years to achieve a more consistent look, we shall
+    // see.
+    let weeks = 53;
+    // Years is a vec containing vecs of years, which consist
+    // of weekday-major grids of days: eg. the first row
+    // represents all of the mondays in the year, in order.
+    let mut years = Vec::with_capacity((last_year - first_year + 1) as usize);
+    for year in first_year..=last_year {
+        if no_commits {
+            break;
+        }
+        years.push(Year {
+            year,
+            days: vec![
+                Day {
+                    commits: Vec::new()
+                };
+                weeks * 7
+            ],
+        });
+    }
+
+    // Organize the metadata so it's easy to go through when rendering the graphs
+    let mut i = 0;
+    for year in first_year..=last_year {
+        if no_commits {
+            break;
+        }
+
+        // Loop through the years
+
+        let days = &mut years[(year - first_year) as usize].days;
+        while i < commit_dates.len() {
+            // Loop through the days until the commit is from
+            // next year or commits run out
+
+            let (date, metadata) = &commit_dates[i];
+            if date.iso_week().year() != year {
+                break;
+            }
+            let weekday_index = date.weekday().num_days_from_monday() as usize;
+            let week_index = date.iso_week().week0() as usize;
+            if week_index < weeks {
+                let day = &mut days[weekday_index * weeks + week_index];
+                day.commits.push(*metadata);
+            }
+
+            i += 1;
+        }
+
+        verbose_println(
+            &format!(
+                "prepared year {} for rendering, {} commits processed so far",
+                year, i
+            ),
+            false,
+        );
+        if i >= commit_dates.len() {
+            break;
+        }
+    }
+
     // Load the head, header and footer files, and create the site's
     // html templates.
 
@@ -146,196 +306,51 @@ fn main() {
         }
     }
     if style.is_none() {
-        style = Some(format!("<style>{}</style>", CSS));
+        style = Some(format!("<style>\n{}</style>", CSS));
     }
     let style = style.unwrap();
 
     let html_head = format!(
-        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>Activity</title>\n{}\n{}\n</head>\n<body>\n{}\n",
-        style,
-        external_head,
-        external_header
+        "<!DOCTYPE html>\n<html>\n<head>\n{}\n{}\n{}\n</head>\n<body>\n{}\n",
+        HTML_HEAD, style, external_head, external_header
     );
     let html_tail = format!("{}</body></html>", external_footer);
 
-    // Start actually processing the repositories
-    for repo_dir in &args.repos {
-        match fs::read_dir(&repo_dir) {
-            Ok(subdirs) => {
-                // Find all the repository directories
-                let mut repos = HashSet::new();
-                analyze_dirs(&mut repos, &repo_dir, subdirs, args.depth, &verbose_println);
-                verbose_println("finished scanning for git repositories", false);
+    let html = render_to_html(&years, weeks, &html_head, &html_tail, &verbose_println);
 
-                let commit_count = AtomicU32::new(0);
-                let author_flag = args
-                    .author
-                    .as_ref()
-                    .map(|author| format!("--author={}", author));
-                let mut commit_dates = repos
-                    .par_iter()
-                    // Collect the metadata of each commit in the repositories
-                    .map(|repo| {
-                        let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
-                        let path = &repo.path;
-                        let mut args = vec!["log", "--all", "--format=oneline"];
-                        if let Some(author_flag) = &author_flag {
-                            args.push(author_flag);
-                        }
-                        let commits = run_git(&path, &args);
-                        let lines: Vec<&str> = commits
-                            .lines()
-                            .filter_map(|line| line.split(' ').next())
-                            .collect();
-                        commit_dates.par_extend(lines.par_iter().filter_map(|hash| {
-                            let date = run_git(
-                                &path,
-                                &["show", "-s", "--format=%ai", "--date=iso8601", &hash],
-                            );
-                            if let Ok(date) = date.parse() {
-                                // Note: Chrono adheres to ISO 8601, and
-                                // that's what we ask from git, so this
-                                // should always be valid.
-                                let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
-                                verbose_println(
-                                    &format!("commits accounted for {}\r", count),
-                                    true,
-                                );
-                                Some((date, repo))
-                            } else {
-                                None
-                            }
-                        }));
-                        commit_dates
-                    })
-                    // Fold all the gathered dates into one vec
-                    .reduce(
-                        || Vec::new(),
-                        |mut a, b| {
-                            a.extend(&b);
-                            a
-                        },
-                    );
-
-                verbose_println(
-                    &format!(
-                        "counted up {} commits in {} repositories",
-                        commit_dates.len(),
-                        repos.len()
-                    ),
-                    false,
-                );
-
-                // Sort the metadata by date, and prepare to go through all of them
-                commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
-                let get_year = |date: DateTime<Utc>| date.date().iso_week().year();
-                let (first_year, last_year) = if commit_dates.len() > 0 {
-                    (
-                        get_year(commit_dates[0].0),
-                        get_year(commit_dates[commit_dates.len() - 1].0),
-                    )
-                } else {
-                    // There are no commits, so it doesn't really matter what the years are.
-                    (2000, 2000)
-                };
-
-                // Since the graph is ISO week based, there might be 52 or
-                // 53 weeks per year. Might clip off the last year during
-                // leap years to achieve a more consistent look, we shall
-                // see.
-                let weeks = 53;
-                // Years is a vec containing vecs of years, which consist
-                // of weekday-major grids of days: eg. the first row
-                // represents all of the mondays in the year, in order.
-                let mut years = Vec::with_capacity((last_year - first_year + 1) as usize);
-                for year in first_year..=last_year {
-                    years.push(Year {
-                        year,
-                        days: vec![
-                            Day {
-                                commits: Vec::new()
-                            };
-                            weeks * 7
-                        ],
-                    });
-                }
-
-                // Organize the metadata so it's easy to go through when rendering the graphs
-                let mut i = 0;
-                for year in first_year..=last_year {
-                    // Loop through the years
-
-                    let days = &mut years[(year - first_year) as usize].days;
-                    while i < commit_dates.len() {
-                        // Loop through the days until the commit is from
-                        // next year or commits run out
-
-                        let (date, metadata) = &commit_dates[i];
-                        if date.iso_week().year() != year {
-                            break;
-                        }
-                        let weekday_index = date.weekday().num_days_from_monday() as usize;
-                        let week_index = date.iso_week().week0() as usize;
-                        if week_index < weeks {
-                            let day_index = weekday_index * weeks + week_index;
-                            days[day_index].commits.push(*metadata);
-                        }
-
-                        i += 1;
-                    }
-
-                    verbose_println(
-                        &format!(
-                            "prepared year {} for rendering, {} commits processed so far",
-                            year, i
-                        ),
-                        false,
-                    );
-                    if i >= commit_dates.len() {
-                        break;
-                    }
-                }
-
-                let mut output = args
-                    .output
-                    .as_ref()
-                    .and_then(|path| File::create(path).ok())
-                    .map(|file| BufWriter::new(file));
-                if let Some(writer) = &mut output {
-                    render_to_file(
-                        &years,
-                        weeks,
-                        &html_head,
-                        &html_tail,
-                        writer,
-                        &verbose_println,
-                    );
-                }
-
-                let mut css = args
-                    .css
-                    .as_ref()
-                    .and_then(|path| File::create(path).ok())
-                    .map(|file| BufWriter::new(file));
-                if let Some(writer) = &mut css {
-                    let _ = write!(writer, "{}", CSS);
-                }
-
-                if args.stdout {
-                    render_to_stdout(&years, weeks, &verbose_println);
-                }
-
-                verbose_println(
-                    &format!(
-                        "finished all tasks, this run of the program took {:?}",
-                        time::Instant::now() - start_time
-                    ),
-                    false,
-                );
-            }
-            Err(err) => eprintln!("error: cannot read directory ({})", err),
+    let mut output = args
+        .output
+        .as_ref()
+        .and_then(|path| File::create(path).ok())
+        .map(|file| BufWriter::new(file));
+    if let Some(writer) = &mut output {
+        if let Err(err) = writer.write(html.as_bytes()) {
+            eprintln!("error: encountered while writing out the html: {}", err);
         }
     }
+
+    let mut css = args
+        .css
+        .as_ref()
+        .and_then(|path| File::create(path).ok())
+        .map(|file| BufWriter::new(file));
+    if let Some(writer) = &mut css {
+        if let Err(err) = writer.write(CSS.as_bytes()) {
+            eprintln!("error: encountered while writing out the css: {}", err);
+        }
+    }
+
+    if args.stdout {
+        render_to_stdout(&years, weeks, &verbose_println);
+    }
+
+    verbose_println(
+        &format!(
+            "finished all tasks, this run of the program took {:?}",
+            time::Instant::now() - start_time
+        ),
+        false,
+    );
 }
 
 fn create_web_path(path: PathBuf) -> String {
@@ -392,27 +407,25 @@ fn get_shaded_char(shade: f32) -> char {
     }
 }
 
-fn render_to_file<F: Fn(&str, bool)>(
+fn render_to_html<F: Fn(&str, bool)>(
     years: &[Year],
     weeks: usize,
     head: &str,
     tail: &str,
-    writer: &mut BufWriter<File>,
     verbose_println: &F,
-) {
-    verbose_println("writing html to file...", true);
+) -> String {
+    let mut result = String::with_capacity(1024);
+    verbose_println("rendering html to string...", true);
 
-    let _ = writeln!(writer, "{}", head);
-
+    result += head;
     for year in years.iter().rev() {
         let max_count = get_max_count(year);
-        let _ = writeln!(
-            writer,
-            "<table class=\"activity-table\"><thead><tr><td class=\"activity-header-year\" colspan=\"{}\">{}</td></tr></thead><tbody>",
+        result += &format!(
+            "<table class=\"activity-table\"><thead><tr><td class=\"activity-header-year\" colspan=\"{}\"><h3>{}</h3></td></tr></thead><tbody>\n",
             weeks, year.year
         );
         for day in 0..7 {
-            let _ = writeln!(writer, "<tr>");
+            result += "<tr>";
             for week in 0..weeks {
                 let metadata = &year.days[day * weeks + week];
                 let commit_count = metadata.commits.len();
@@ -422,18 +435,18 @@ fn render_to_file<F: Fn(&str, bool)>(
                 } else {
                     format!("{} commits", commit_count)
                 };
-                let _ = writeln!(
-                    writer,
+                result += &format!(
                     "<td class=\"blob lvl{}\" title=\"{}\"></td>",
                     shade, tooltip
                 );
             }
-            let _ = writeln!(writer, "</tr>");
+            result += "</tr>\n";
         }
-        let _ = writeln!(writer, "</tbody></table>");
+        result += "</tbody></table>\n";
     }
-    let _ = writeln!(writer, "{}", tail);
-    verbose_println("wrote html to file", false);
+    result += tail;
+    verbose_println("rendered html to string", false);
+    result
 }
 
 fn render_to_stdout<F: Fn(&str, bool)>(years: &[Year], weeks: usize, verbose_println: &F) {

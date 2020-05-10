@@ -7,12 +7,10 @@ html {
     width: auto;
     margin: auto;
     margin-bottom: 1em;
-    border-collapse: collapse;
 }
 
 .activity-header-year {
     text-align: center;
-    font-family: "Consolas";
 }
 
 .blob {
@@ -59,6 +57,12 @@ html {
     .lvl2 { background-color: #404752; }
     .lvl3 { background-color: #525e74; }
     .lvl4 { background-color: #62789a; }
+}
+
+@media (max-width: 760px) {
+    .activity-table {
+	border-collapse: collapse;
+    }
 }
 
 @media (max-width: 600px) {
