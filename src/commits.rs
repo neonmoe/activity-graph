@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 use std::collections::HashSet;
@@ -14,48 +15,41 @@ pub fn find_dates<'a>(
 ) -> Vec<(DateTime<Utc>, &'a ProjectMetadata)> {
     let commit_count = AtomicU32::new(0);
     let author_flag = author.as_ref().map(|author| format!("--author={}", author));
-    let commit_dates = repos
-        .par_iter()
-        // Collect the metadata of each commit in the repositories
-        .map(|repo| {
-            let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
-            let path = &repo.path;
-            // TODO: Read dates from the log to avoid most of the current git cmds
-            let mut args = vec!["log", "--all", "--format=oneline"];
-            if let Some(author_flag) = &author_flag {
-                args.push(author_flag);
-            }
-            let commits = run_git(&path, &args);
-            let lines: Vec<&str> = commits
-                .lines()
-                .filter_map(|line| line.split(' ').next())
-                .collect();
-            commit_dates.par_extend(lines.par_iter().filter_map(|hash| {
-                let date = run_git(
-                    &path,
-                    &["show", "-s", "--format=%ai", "--date=iso8601", &hash],
-                );
-                if let Ok(date) = date.parse() {
-                    // Note: Chrono adheres to ISO 8601, and
-                    // that's what we ask from git, so this
-                    // should always be valid.
-                    let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
-                    log::verbose_println(&format!("commits accounted for {}\r", count), true);
-                    Some((date, repo))
-                } else {
-                    None
-                }
-            }));
-            commit_dates
-        })
-        // Fold all the gathered dates into one vec
-        .reduce(
-            || Vec::new(),
-            |mut a, b| {
-                a.extend(&b);
-                a
-            },
-        );
+
+    #[cfg(feature = "rayon")]
+    let repo_iter = repos.par_iter();
+    #[cfg(not(feature = "rayon"))]
+    let repo_iter = repos.iter();
+
+    let commit_dates = repo_iter.map(|repo| {
+        let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
+        let path = &repo.path;
+        let mut args = vec!["log", "--all", "--format=format:%ai", "--date=iso8601"];
+        if let Some(author_flag) = &author_flag {
+            args.push(author_flag);
+        }
+        let commits = run_git(&path, &args);
+        for date in commits.lines().filter_map(|date| date.parse().ok()) {
+            let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
+            log::verbose_println(&format!("commits accounted for {}\r", count), true);
+            commit_dates.push((date, repo));
+        }
+        commit_dates
+    });
+
+    #[cfg(feature = "rayon")]
+    let commit_dates = commit_dates.reduce(
+        || Vec::new(),
+        |mut a, b| {
+            a.extend(&b);
+            a
+        },
+    );
+    #[cfg(not(feature = "rayon"))]
+    let commit_dates = commit_dates.fold(Vec::new(), |mut a, b| {
+        a.extend(&b);
+        a
+    });
 
     log::verbose_println(
         &format!(
