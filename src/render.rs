@@ -6,17 +6,17 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Component, PathBuf};
 
-use crate::{log, Args, Day, ProjectMetadata, Year};
+use crate::{log, Day, ExternalHtml, ProjectMetadata, Year};
 
 static HTML_HEAD: &str = include_str!("head.html");
 static CSS: &str = include_str!("activity-graph.css");
 static WEEKS: usize = 53;
 
-pub fn gather_years<'a>(
-    commit_dates: &[(DateTime<Utc>, &'a ProjectMetadata)],
+pub fn gather_years(
+    commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>,
     first_year: i32,
     last_year: i32,
-) -> Vec<Year<'a>> {
+) -> Vec<Year> {
     // Years is a vec containing vecs of years, which consist
     // of weekday-major grids of days: eg. the first row
     // represents all of the mondays in the year, in order.
@@ -28,16 +28,16 @@ pub fn gather_years<'a>(
         });
     }
 
-    let mut i = 0;
+    let mut commit_dates = commit_dates.into_iter();
+    let mut counted_commits = 0;
     for year in first_year..=last_year {
         // Loop through the years
 
         let days = &mut years[(year - first_year) as usize].days;
-        while i < commit_dates.len() {
+        while let Some((date, metadata)) = commit_dates.next() {
             // Loop through the days until the commit is from
             // next year or commits run out
 
-            let (date, metadata) = &commit_dates[i];
             if date.iso_week().year() != year {
                 break;
             }
@@ -45,42 +45,36 @@ pub fn gather_years<'a>(
             let week_index = date.iso_week().week0() as usize;
             if week_index < WEEKS {
                 let day = &mut days[weekday_index * WEEKS + week_index];
-                day.commits.push(*metadata);
+                day.commits.push(metadata);
+                counted_commits += 1;
             }
-
-            i += 1;
         }
 
         log::verbose_println(
             &format!(
                 "prepared year {} for rendering, {} commits processed so far",
-                year, i
+                year, counted_commits
             ),
             false,
         );
-        if i >= commit_dates.len() {
-            break;
-        }
     }
     years
 }
 
 /// Renders a HTML visualization of the commits based on the
 /// arguments.
-pub fn html(args: &Args, years: &[Year]) -> String {
+pub fn html(ext: &ExternalHtml, html: &PathBuf, css: Option<&PathBuf>, years: &[Year]) -> String {
     // Prepare the html scaffolding around the tables
-    let external_head = read_optional_file(&args.external_head).unwrap_or_else(String::new);
-    let external_header = read_optional_file(&args.external_header).unwrap_or_else(String::new);
-    let external_footer = read_optional_file(&args.external_footer).unwrap_or_else(String::new);
+    let external_head = read_optional_file(&ext.external_head).unwrap_or_else(String::new);
+    let external_header = read_optional_file(&ext.external_header).unwrap_or_else(String::new);
+    let external_footer = read_optional_file(&ext.external_footer).unwrap_or_else(String::new);
 
     let mut style = None;
-    if let (Some(css_path), Some(output_path)) = (&args.css, &args.output) {
-        if let Some(base) = output_path.parent() {
-            if let Some(relative_path) = pathdiff::diff_paths(&css_path, base) {
-                // Add the <link> element instead of <style> if using external css
-                let path = create_web_path(relative_path);
-                style = Some(format!("<link href=\"{}\" rel=\"stylesheet\">", path));
-            }
+    if let (Some(base), Some(css_path)) = (html.parent(), &css) {
+        if let Some(relative_path) = pathdiff::diff_paths(&css_path, base) {
+            // Add the <link> element instead of <style> if using external css
+            let path = create_web_path(relative_path);
+            style = Some(format!("<link href=\"{}\" rel=\"stylesheet\">", path));
         }
     }
     if style.is_none() {

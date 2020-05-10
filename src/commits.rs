@@ -9,10 +9,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{log, ProjectMetadata};
 
-pub fn find_dates<'a>(
+pub fn find_dates(
     author: Option<&String>,
-    repos: &'a HashSet<ProjectMetadata>,
-) -> Vec<(DateTime<Utc>, &'a ProjectMetadata)> {
+    repos: &HashSet<ProjectMetadata>,
+) -> Vec<(DateTime<Utc>, ProjectMetadata)> {
     let commit_count = AtomicU32::new(0);
     let author_flag = author.as_ref().map(|author| format!("--author={}", author));
 
@@ -22,7 +22,7 @@ pub fn find_dates<'a>(
     let repo_iter = repos.iter();
 
     let commit_dates = repo_iter.map(|repo| {
-        let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
+        let mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)> = Vec::new();
         let path = &repo.path;
         let mut args = vec!["log", "--all", "--format=format:%ai", "--date=iso8601"];
         if let Some(author_flag) = &author_flag {
@@ -32,7 +32,7 @@ pub fn find_dates<'a>(
         for date in commits.lines().filter_map(|date| date.parse().ok()) {
             let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
             log::verbose_println(&format!("commits accounted for {}\r", count), true);
-            commit_dates.push((date, repo));
+            commit_dates.push((date, repo.clone()));
         }
         commit_dates
     });
@@ -41,7 +41,7 @@ pub fn find_dates<'a>(
     let commit_dates = commit_dates.reduce(
         || Vec::new(),
         |mut a, b| {
-            a.extend(&b);
+            a.extend(b);
             a
         },
     );

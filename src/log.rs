@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 lazy_static::lazy_static! {
-    static ref LAST_UPDATE_PRINT_TIME: Mutex<Instant> = Mutex::new(Instant::now());
+    static ref LAST_UPDATE_PRINT_TIME: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
 static LAST_PRINT_WAS_UPDATE: AtomicBool = AtomicBool::new(false);
@@ -24,11 +24,10 @@ pub fn verbose_println(s: &str, updating_line: bool) {
             // Throttle the line updates to once per 20ms, 50 Hz is plenty real-time.
             if let Ok(mut last_update) = LAST_UPDATE_PRINT_TIME.lock() {
                 let now = Instant::now();
-                if now - *last_update < Duration::from_millis(20) {
+                if last_update.is_some() && now - last_update.unwrap() < Duration::from_millis(20) {
                     return;
-                } else {
-                    *last_update = now;
                 }
+                *last_update = Some(now);
             }
 
             // Clear the line, then write the line, but limit it to the terminal width
@@ -43,6 +42,9 @@ pub fn verbose_println(s: &str, updating_line: bool) {
             if was_update {
                 // Clear the line
                 eprint!("{:width$}\r", "", width = width);
+                if let Ok(mut last_update) = LAST_UPDATE_PRINT_TIME.lock() {
+                    *last_update = None;
+                }
             }
             eprintln!("{}", s);
         }
