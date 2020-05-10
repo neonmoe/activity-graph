@@ -1,21 +1,21 @@
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Request, Response, Server, StatusCode};
 use tokio::runtime::Runtime;
 use tokio::task;
-use hyper::{Body, Request, Response, Server, StatusCode};
-use hyper::service::{make_service_fn, service_fn};
 
-use std::net::SocketAddr;
 use std::convert::Infallible;
-use std::sync::RwLock;
-use std::time::{Instant, Duration};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
-use crate::{generate_years, log, render, Args, GenerationData, ExternalHtml};
+use crate::{generate_years, log, render, Args, ExternalResources, GenerationData};
 
 lazy_static::lazy_static! {
     // These are set before the server is run, and only used in responses
     static ref GENERATION_DATA: RwLock<GenerationData> = RwLock::new(Default::default());
-    static ref EXTERNAL_HTML: RwLock<ExternalHtml> = RwLock::new(Default::default());
+    static ref EXTERNAL_HTML: RwLock<ExternalResources> = RwLock::new(Default::default());
     static ref LAST_CACHE: RwLock<Instant> = RwLock::new(Instant::now());
     static ref CACHE_LIFETIME: RwLock<Duration> = RwLock::new(Duration::from_secs(0));
 
@@ -30,7 +30,12 @@ static INDEX_PATHS: &[&str] = &["/", "/index.html", "/index.htm", ""];
 pub fn run(args: &Args, host: SocketAddr, cache_lifetime: u64) {
     log::verbose_println(&format!("starting server on {}...", host), true);
 
-    if let (Ok(mut gen), Ok(mut ext), Ok(mut lifetime), Ok(mut last_cache)) = (GENERATION_DATA.write(), EXTERNAL_HTML.write(), CACHE_LIFETIME.write(), LAST_CACHE.write()) {
+    if let (Ok(mut gen), Ok(mut ext), Ok(mut lifetime), Ok(mut last_cache)) = (
+        GENERATION_DATA.write(),
+        EXTERNAL_HTML.write(),
+        CACHE_LIFETIME.write(),
+        LAST_CACHE.write(),
+    ) {
         *gen = args.gen.clone();
         *ext = args.ext.clone();
         *lifetime = Duration::from_secs(cache_lifetime);
@@ -42,9 +47,8 @@ pub fn run(args: &Args, host: SocketAddr, cache_lifetime: u64) {
     match Runtime::new() {
         Ok(mut runtime) => {
             runtime.block_on(async {
-                let make_service = make_service_fn(|_conn| async {
-                    Ok::<_, Infallible>(service_fn(handle))
-                });
+                let make_service =
+                    make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle)) });
                 let server = Server::bind(&host).serve(make_service);
                 log::verbose_println(&format!("server started on {}", host), false);
                 if let Err(err) = server.await {
@@ -86,7 +90,9 @@ async fn refresh_caches() {
             let lifetime = CACHE_LIFETIME.read().unwrap();
             *last_cache + *lifetime
         };
-        if Instant::now() >= refresh_time && !REFRESHING_CACHE.compare_and_swap(false, true, Ordering::Relaxed) {
+        if Instant::now() >= refresh_time
+            && !REFRESHING_CACHE.compare_and_swap(false, true, Ordering::Relaxed)
+        {
             let start = Instant::now();
             if let (Ok(gen), Ok(ext)) = (GENERATION_DATA.read(), EXTERNAL_HTML.read()) {
                 let years = generate_years(&gen);
@@ -104,7 +110,10 @@ async fn refresh_caches() {
                     *last_cache = Instant::now();
                 }
             }
-            log::verbose_println(&format!("updated cache, took {:?}", Instant::now() - start), false);
+            log::verbose_println(
+                &format!("updated cache, took {:?}", Instant::now() - start),
+                false,
+            );
             REFRESHING_CACHE.store(false, Ordering::Relaxed);
         }
     })
