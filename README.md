@@ -14,7 +14,7 @@ This program has 3 general use-cases:
    `<style>`) to be looked at / served via a file server.
 
    ```
-   activity-graph -r <dir-with-your-repos> -o test.html [-c test.css]
+   activity-graph -r <dir-with-your-repos> generate -o test.html [-c test.css]
    ```
 
 3. Serving the generated html and css straight from memory via
@@ -23,6 +23,20 @@ This program has 3 general use-cases:
    ```
    activity-graph -r <dir-with-your-repos> server --host 0.0.0.0:80
    ```
+
+## Building
+
+Install Rust 1.43.1 and Cargo 1.43.0 (or newer), and then run the
+following command:
+
+```
+cargo build --release [--features server]
+```
+
+The executable is `target/release/activity-graph[.exe]`.
+
+Might work on older versions of Rust and/or Cargo, and probably does,
+but those versions are what I wrote this with.
 
 ## Optional features
 
