@@ -7,6 +7,7 @@ html {
     width: auto;
     margin: auto;
     margin-bottom: 1em;
+    border-collapse: collapse;
 }
 
 .activity-header-year {
@@ -59,3 +60,13 @@ html {
     .lvl3 { background-color: #525e74; }
     .lvl4 { background-color: #62789a; }
 }
+
+@media (max-width: 600px) {
+    .blob {
+        width: 1.3vw;
+        height: 1.3vw;
+    }
+}
+
+@media (max-width: 400px) { .blob { border-width: 0.75px; } }
+@media (max-width: 200px) { .blob { border-width: 0px; } }
