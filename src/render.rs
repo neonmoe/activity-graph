@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Component, PathBuf};
 
-use crate::{log, Day, ExternalHtml, ProjectMetadata, Year};
+use crate::{log, Day, ExternalResources, ProjectMetadata, Year};
 
 static HTML_HEAD: &str = include_str!("head.html");
 static CSS: &str = include_str!("activity-graph.css");
@@ -63,14 +63,20 @@ pub fn gather_years(
 
 /// Renders a HTML visualization of the commits based on the
 /// arguments.
-pub fn html(ext: &ExternalHtml, html: &PathBuf, css: Option<&PathBuf>, years: &[Year]) -> String {
+pub fn html(
+    ext: &ExternalResources,
+    html_path: &PathBuf,
+    css_path: Option<&PathBuf>,
+    years: &[Year],
+) -> String {
     // Prepare the html scaffolding around the tables
     let external_head = read_optional_file(&ext.external_head).unwrap_or_else(String::new);
     let external_header = read_optional_file(&ext.external_header).unwrap_or_else(String::new);
     let external_footer = read_optional_file(&ext.external_footer).unwrap_or_else(String::new);
+    let external_css = read_optional_file(&ext.external_css).unwrap_or_else(String::new);
 
     let mut style = None;
-    if let (Some(base), Some(css_path)) = (html.parent(), &css) {
+    if let (Some(base), Some(css_path)) = (html_path.parent(), &css_path) {
         if let Some(relative_path) = pathdiff::diff_paths(&css_path, base) {
             // Add the <link> element instead of <style> if using external css
             let path = create_web_path(relative_path);
@@ -78,7 +84,7 @@ pub fn html(ext: &ExternalHtml, html: &PathBuf, css: Option<&PathBuf>, years: &[
         }
     }
     if style.is_none() {
-        style = Some(format!("<style>\n{}</style>", CSS));
+        style = Some(format!("<style>\n{}\n{}</style>", CSS, external_css));
     }
     let style = style.unwrap();
 
@@ -123,11 +129,9 @@ pub fn html(ext: &ExternalHtml, html: &PathBuf, css: Option<&PathBuf>, years: &[
     result
 }
 
-/// Note: currently this just returns an owned version of a static
-/// string, this function exists so it's consistent with
-/// `render_html`.
-pub fn css() -> String {
-    CSS.to_string()
+pub fn css(ext: &ExternalResources) -> String {
+    let external_css = read_optional_file(&ext.external_css).unwrap_or_else(String::new);
+    format!("{}\n{}", CSS, external_css)
 }
 
 /// Renders an ASCII visualization of the commits.

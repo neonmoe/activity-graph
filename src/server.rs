@@ -93,7 +93,7 @@ async fn refresh_caches() {
                 let html_path = PathBuf::from("/index");
                 let css_path = PathBuf::from("/activity-graph.css");
                 let output_html = render::html(&ext, &html_path, Some(&css_path), &years);
-                let output_css = render::css();
+                let output_css = render::css(&ext);
                 if let Ok(mut html) = CACHED_HTML.write() {
                     *html = output_html;
                 }

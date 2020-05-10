@@ -48,7 +48,7 @@ pub struct Args {
     #[structopt(flatten)]
     gen: GenerationData,
     #[structopt(flatten)]
-    ext: ExternalHtml,
+    ext: ExternalResources,
 }
 
 #[derive(StructOpt, Default, Clone)]
@@ -68,7 +68,7 @@ pub struct GenerationData {
 }
 
 #[derive(StructOpt, Clone, Default)]
-pub struct ExternalHtml {
+pub struct ExternalResources {
     /// A html file that will be pasted in the <head> element
     #[structopt(long)]
     external_head: Option<PathBuf>,
@@ -80,6 +80,9 @@ pub struct ExternalHtml {
     /// element
     #[structopt(long)]
     external_footer: Option<PathBuf>,
+    /// A css file that will be pasted at the end of the css
+    #[structopt(long)]
+    external_css: Option<PathBuf>,
 }
 
 #[derive(StructOpt)]
@@ -149,7 +152,7 @@ fn main() {
                 write_to_file(&html, output_html, "html");
 
                 if let Some(css) = css {
-                    let output_css = render::css();
+                    let output_css = render::css(&args.ext);
                     write_to_file(&css, output_css, "css");
                 }
             }
