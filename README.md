@@ -7,21 +7,21 @@ This program has 3 general use-cases:
 1. Printing out a nice visualization of your commits to stdout.
 
    ```
-   activity-graph -r <dir-with-your-repos> -s
+   activity-graph -i <dirs-with-your-repos> --stdout
    ```
 
 2. Generating a html file (and, optionally, a css file instead of a
    `<style>`) to be looked at / served via a file server.
 
    ```
-   activity-graph -r <dir-with-your-repos> generate -o test.html [-c test.css]
+   activity-graph -i <dirs-with-your-repos> generate -o test.html [-c test.css]
    ```
 
 3. Serving the generated html and css straight from memory via
    [`hyper`][hyper]:
 
    ```
-   activity-graph -r <dir-with-your-repos> server --host 0.0.0.0:80
+   activity-graph -i <dirs-with-your-repos> server --host 0.0.0.0:80
    ```
 
 ## Building
@@ -67,24 +67,24 @@ Jens Pitkanen <jens@neon.moe>
 Generates a visualization of your commit activity in a set of git repositories.
 
 USAGE:
-    activity-graph.exe [FLAGS] [OPTIONS] [SUBCOMMAND]
+    activity-graph [FLAGS] [OPTIONS] [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
-    -s, --stdout     Prints a visualization into stdout
+        --stdout     Prints a visualization into stdout
     -V, --version    Prints version information
     -v, --verbose    Prints verbose information
 
 OPTIONS:
     -a, --author <author>                      Regex that matches the author(s) whose commits are being counted (if not
-                                               set, all commits will be accounted for)
+                                               set, all commits will be counted)
     -d, --depth <depth>                        How many subdirectories deep the program should search (if not set, there
                                                is no limit)
         --external-css <external-css>          A css file that will be pasted at the end of the css
         --external-footer <external-footer>    A html file that will be pasted at the end of the <body> element
         --external-head <external-head>        A html file that will be pasted in the <head> element
         --external-header <external-header>    A html file that will be pasted at the beginning of the <body> element
-    -r, --repos <repos>...                     Path(s) to the directory (or directories) containing the repositories you
+    -i, --input <input>...                     Path(s) to the directory (or directories) containing the repositories you
                                                want to include
 
 SUBCOMMANDS:
@@ -100,7 +100,7 @@ activity-graph-generate 0.1.0
 Output the generated html into a file
 
 USAGE:
-    activity-graph.exe generate [OPTIONS]
+    activity-graph generate [OPTIONS]
 
 FLAGS:
     -h, --help       Prints help information
@@ -119,7 +119,7 @@ activity-graph-server 0.1.0
 Run a server that serves the generated activity graph html
 
 USAGE:
-    activity-graph.exe server [OPTIONS]
+    activity-graph server [OPTIONS]
 
 FLAGS:
     -h, --help       Prints help information

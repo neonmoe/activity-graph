@@ -43,7 +43,7 @@ pub struct Args {
     #[structopt(short, long)]
     verbose: bool,
     /// Prints a visualization into stdout
-    #[structopt(short, long)]
+    #[structopt(long)]
     stdout: bool,
     #[structopt(flatten)]
     gen: GenerationData,
@@ -54,7 +54,7 @@ pub struct Args {
 #[derive(StructOpt, Default, Clone)]
 pub struct GenerationData {
     /// Regex that matches the author(s) whose commits are being
-    /// counted (if not set, all commits will be accounted for)
+    /// counted (if not set, all commits will be counted)
     #[structopt(short, long)]
     author: Option<String>,
     /// How many subdirectories deep the program should search (if not
@@ -64,7 +64,7 @@ pub struct GenerationData {
     /// Path(s) to the directory (or directories) containing the
     /// repositories you want to include
     #[structopt(short, long)]
-    repos: Vec<PathBuf>,
+    input: Vec<PathBuf>,
 }
 
 #[derive(StructOpt, Clone, Default)]
@@ -177,7 +177,7 @@ fn main() {
 }
 
 pub fn generate_years(gen: &GenerationData) -> Vec<Year> {
-    let repos = find_repositories::from_paths(&gen.repos, gen.depth);
+    let repos = find_repositories::from_paths(&gen.input, gen.depth);
 
     let mut commit_dates = commits::find_dates(gen.author.as_ref(), &repos);
     commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
