@@ -5,6 +5,7 @@ name = "activity-graph"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "lazy_static",
  "pathdiff",
  "rayon",
  "structopt",

@@ -13,3 +13,4 @@ chrono = "0.4.11"
 rayon = "1.3.0"
 pathdiff = "0.2.0"
 term_size = "*" # structopt uses some version of term size
+lazy_static = "1.4.0"

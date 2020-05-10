@@ -1,32 +1,31 @@
 use chrono::{DateTime, Datelike, Utc};
-use rayon::prelude::*;
 use structopt::StructOpt;
 
-use std::collections::HashSet;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::path::{Component, PathBuf};
 use std::time;
+
+mod commits;
+mod find_repositories;
+mod log;
 
 static HTML_HEAD: &str = include_str!("head.html");
 static CSS: &str = include_str!("activity-graph.css");
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct ProjectMetadata {
+pub struct ProjectMetadata {
     name: String,
     path: PathBuf,
 }
 
 #[derive(Clone)]
-struct Day<'a> {
+pub struct Day<'a> {
     commits: Vec<&'a ProjectMetadata>,
 }
 
 #[derive(Clone)]
-struct Year<'a> {
+pub struct Year<'a> {
     year: i32,
     days: Vec<Day<'a>>,
 }
@@ -85,130 +84,10 @@ fn main() {
         args.stdout = true;
     }
 
-    // Don't mind this verbose printing stuff, it's just a very
-    // elaborate system to print "updating" lines with a cooldown.
-    let last_update_print = Mutex::new(time::Instant::now());
-    let last_verbose_print_was_update = Mutex::new(false);
-    let verbose_println = |s: &str, updating_line: bool| {
-        if args.verbose {
-            let width = term_size::dimensions()
-                .map(|(w, _)| w - 1)
-                .unwrap_or(70)
-                .max(4);
+    log::set_verbosity(args.verbose);
 
-            if updating_line {
-                // Throttle the line updates to once per 20ms, 50 Hz is plenty real-time.
-                if let Ok(mut last_update) = last_update_print.lock() {
-                    let now = time::Instant::now();
-                    if now - *last_update < time::Duration::from_millis(20) {
-                        return;
-                    } else {
-                        *last_update = now;
-                    }
-                }
-
-                // Clear the line, then write the line, but limit it to the terminal width
-                if s.len() >= width - 1 {
-                    eprint!("{:width$}\r{}...\r", "", &s[..width - 4], width = width);
-                } else {
-                    eprint!("{:width$}\r{}\r", "", s, width = width);
-                };
-                if let Ok(mut was_update) = last_verbose_print_was_update.lock() {
-                    *was_update = true;
-                }
-            } else {
-                if let Ok(mut was_update) = last_verbose_print_was_update.lock() {
-                    if *was_update {
-                        // Clear the line
-                        eprint!("{:width$}\r", "", width = width);
-                    }
-                    *was_update = false;
-                }
-                eprintln!("{}", s);
-            }
-        }
-    };
-
-    // Find the repositories
-    let repos = args
-        .repos
-        .iter()
-        .map(|repo_dir| {
-            match fs::read_dir(&repo_dir) {
-                Ok(subdirs) => {
-                    // Find all the repository directories
-                    let mut repos = HashSet::new();
-                    analyze_dirs(&mut repos, &repo_dir, subdirs, args.depth, &verbose_println);
-                    repos
-                }
-                Err(err) => {
-                    eprintln!("error: cannot read directory ({})", err);
-                    HashSet::new()
-                }
-            }
-        })
-        .fold(HashSet::new(), |mut a, b| {
-            a.extend(b);
-            a
-        });
-    verbose_println("finished scanning for git repositories", false);
-
-    // Count up the commits in all of the repositories
-    let commit_count = AtomicU32::new(0);
-    let author_flag = args
-        .author
-        .as_ref()
-        .map(|author| format!("--author={}", author));
-    let mut commit_dates = repos
-        .par_iter()
-        // Collect the metadata of each commit in the repositories
-        .map(|repo| {
-            let mut commit_dates: Vec<(DateTime<Utc>, &ProjectMetadata)> = Vec::new();
-            let path = &repo.path;
-            let mut args = vec!["log", "--all", "--format=oneline"];
-            if let Some(author_flag) = &author_flag {
-                args.push(author_flag);
-            }
-            let commits = run_git(&path, &args);
-            let lines: Vec<&str> = commits
-                .lines()
-                .filter_map(|line| line.split(' ').next())
-                .collect();
-            commit_dates.par_extend(lines.par_iter().filter_map(|hash| {
-                let date = run_git(
-                    &path,
-                    &["show", "-s", "--format=%ai", "--date=iso8601", &hash],
-                );
-                if let Ok(date) = date.parse() {
-                    // Note: Chrono adheres to ISO 8601, and
-                    // that's what we ask from git, so this
-                    // should always be valid.
-                    let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
-                    verbose_println(&format!("commits accounted for {}\r", count), true);
-                    Some((date, repo))
-                } else {
-                    None
-                }
-            }));
-            commit_dates
-        })
-        // Fold all the gathered dates into one vec
-        .reduce(
-            || Vec::new(),
-            |mut a, b| {
-                a.extend(&b);
-                a
-            },
-        );
-
-    verbose_println(
-        &format!(
-            "counted up {} commits in {} repositories",
-            commit_dates.len(),
-            repos.len()
-        ),
-        false,
-    );
+    let repos = find_repositories::from_paths(&args.repos, args.depth);
+    let mut commit_dates = commits::find_dates(args.author.as_ref(), &repos);
 
     // Sort the commits by date, and prepare to go through all of them
     commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -276,7 +155,7 @@ fn main() {
             i += 1;
         }
 
-        verbose_println(
+        log::verbose_println(
             &format!(
                 "prepared year {} for rendering, {} commits processed so far",
                 year, i
@@ -316,7 +195,7 @@ fn main() {
     );
     let html_tail = format!("{}</body></html>", external_footer);
 
-    let html = render_to_html(&years, weeks, &html_head, &html_tail, &verbose_println);
+    let html = render_to_html(&years, weeks, &html_head, &html_tail);
 
     let mut output = args
         .output
@@ -341,10 +220,10 @@ fn main() {
     }
 
     if args.stdout {
-        render_to_stdout(&years, weeks, &verbose_println);
+        render_to_stdout(&years, weeks);
     }
 
-    verbose_println(
+    log::verbose_println(
         &format!(
             "finished all tasks, this run of the program took {:?}",
             time::Instant::now() - start_time
@@ -407,15 +286,9 @@ fn get_shaded_char(shade: f32) -> char {
     }
 }
 
-fn render_to_html<F: Fn(&str, bool)>(
-    years: &[Year],
-    weeks: usize,
-    head: &str,
-    tail: &str,
-    verbose_println: &F,
-) -> String {
+fn render_to_html(years: &[Year], weeks: usize, head: &str, tail: &str) -> String {
     let mut result = String::with_capacity(1024);
-    verbose_println("rendering html to string...", true);
+    log::verbose_println("rendering html to string...", true);
 
     result += head;
     for year in years.iter().rev() {
@@ -445,12 +318,12 @@ fn render_to_html<F: Fn(&str, bool)>(
         result += "</tbody></table>\n";
     }
     result += tail;
-    verbose_println("rendered html to string", false);
+    log::verbose_println("rendered html to string", false);
     result
 }
 
-fn render_to_stdout<F: Fn(&str, bool)>(years: &[Year], weeks: usize, verbose_println: &F) {
-    verbose_println("writing ascii representation to stdout...", true);
+fn render_to_stdout(years: &[Year], weeks: usize) {
+    log::verbose_println("writing ascii representation to stdout...", true);
     for year in years.iter().rev() {
         let max_count = get_max_count(year);
         println!("");
@@ -463,87 +336,5 @@ fn render_to_stdout<F: Fn(&str, bool)>(years: &[Year], weeks: usize, verbose_pri
             println!("");
         }
     }
-    verbose_println("wrote ascii representation to stdout", false);
-}
-
-fn run_git(work_dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(work_dir)
-        .stdout(Stdio::piped())
-        .output()
-        .unwrap();
-    String::from_utf8_lossy(&output.stdout).to_string()
-}
-
-fn path_to_string(path: &Path) -> Option<String> {
-    path.canonicalize()
-        .ok()
-        .map(|path| path.into_os_string())
-        .and_then(|path| path.into_string().ok())
-}
-
-fn analyze_dirs<F: Fn(&str, bool)>(
-    git_paths: &mut HashSet<ProjectMetadata>,
-    path: &Path,
-    dirs: fs::ReadDir,
-    depth: Option<i32>,
-    verbose_println: &F,
-) {
-    if let Some(path) = path_to_string(&path) {
-        verbose_println(&format!("scanning: {}\r", path), true);
-    }
-
-    let dirs: Vec<fs::DirEntry> = dirs.filter_map(|result| result.ok()).collect();
-    if dirs
-        .iter()
-        .map(|dir_entry| dir_entry.file_name())
-        .any(|file_name| file_name == ".git")
-    {
-        if let Some(name) = path
-            .file_name()
-            .and_then(|os_str| os_str.to_str())
-            .map(|s| s.to_string())
-        {
-            git_paths.insert(ProjectMetadata {
-                name,
-                path: PathBuf::from(&path),
-            });
-        }
-    }
-
-    if depth.iter().any(|depth| *depth < 0) {
-        // Too deep, don't search subdirectories.
-        return;
-    }
-
-    for dir in dirs {
-        let path = dir.path();
-        if path.file_name().iter().any(|name| *name != ".git") {
-            let fix_symlink = |link_path: PathBuf| {
-                // Fill out the path if it's relative, because it's
-                // relative to the path variable (at least on windows,
-                // should probably test this on other OSes as well,
-                // but, well, I rarely use symlinks).
-                if let Some(base) = path.parent() {
-                    if !link_path.is_absolute() {
-                        let mut fixed_symlink = PathBuf::from(base);
-                        fixed_symlink.push(link_path);
-                        return fixed_symlink;
-                    }
-                }
-                link_path
-            };
-            let path = fs::read_link(&path).map(fix_symlink).unwrap_or(path);
-            if let Ok(dirs) = fs::read_dir(&path) {
-                analyze_dirs(
-                    git_paths,
-                    &path,
-                    dirs,
-                    depth.map(|depth| depth - 1),
-                    verbose_println,
-                );
-            }
-        }
-    }
+    log::verbose_println("wrote ascii representation to stdout", false);
 }
