@@ -13,6 +13,12 @@ use std::time;
 
 static CSS: &str = include_str!("main.css");
 
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct ProjectMetadata {
+    name: String,
+    path: PathBuf,
+}
+
 #[derive(Clone)]
 struct Day<'a> {
     commits: Vec<&'a ProjectMetadata>,
@@ -68,12 +74,6 @@ struct Args {
     /// element
     #[structopt(long)]
     external_footer: Option<PathBuf>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct ProjectMetadata {
-    name: String,
-    path: PathBuf,
 }
 
 fn main() {
@@ -159,7 +159,6 @@ fn main() {
     let html_tail = format!("{}</body></html>", external_footer);
 
     // Start actually processing the repositories
-
     for repo_dir in &args.repos {
         match fs::read_dir(&repo_dir) {
             Ok(subdirs) => {

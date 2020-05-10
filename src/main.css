@@ -40,22 +40,22 @@ html {
 
 @media (prefers-color-scheme: dark) {
     html {
-	background-color: #333;
-	color: #ccc;
+	background-color: #000;
+	color: #AAA;
     }
 
     .blob {
-	background-color: #393939;
-	border-color: #555;
+	background-color: #1b1b1b;
+	border-color: #444;
     }
 
     .blob:hover {
-	border-color: #999;
+	border-color: #777;
     }
 
-    .lvl0 { background-color: #393939; }
-    .lvl1 { background-color: #4f4f60; }
-    .lvl2 { background-color: #656586; }
-    .lvl3 { background-color: #7e7ea8; }
-    .lvl4 { background-color: #9798c5; }
+    .lvl0 { background-color: #1b1b1b; }
+    .lvl1 { background-color: #2e3034; }
+    .lvl2 { background-color: #404752; }
+    .lvl3 { background-color: #525e74; }
+    .lvl4 { background-color: #62789a; }
 }
