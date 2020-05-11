@@ -24,6 +24,7 @@ lazy_static::lazy_static! {
 }
 
 static REFRESHING_CACHE: AtomicBool = AtomicBool::new(false);
+static CACHE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 static INDEX_PATHS: &[&str] = &["/", "/index.html", "/index.htm", ""];
 
@@ -70,21 +71,26 @@ async fn handle(req: Request<Body>) -> Result<Response<Body>, Infallible> {
         refresh_caches().await;
         CACHED_CSS.read()
     } else {
-        let mut response = Response::new(Body::from("404 Not Found"));
-        *response.status_mut() = StatusCode::NOT_FOUND;
-        return Ok(response);
+        return Ok(error_response("404 Not Found", StatusCode::NOT_FOUND));
     };
     if let Ok(cache) = cache {
         Ok(Response::new(Body::from(cache.clone())))
     } else {
-        let mut response = Response::new(Body::from("internal server error"));
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        Ok(response)
+        Ok(error_response(
+            "500 Internal Server Error\nSorry, the server encountered an unexpected error.",
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
     }
 }
 
+fn error_response(s: &'static str, status_code: StatusCode) -> Response<Body> {
+    let mut response = Response::new(Body::from(s));
+    *response.status_mut() = status_code;
+    response
+}
+
 async fn refresh_caches() {
-    task::block_in_place(|| {
+    let task = task::spawn_blocking(|| {
         let refresh_time = {
             let last_cache = LAST_CACHE.read().unwrap();
             let lifetime = CACHE_LIFETIME.read().unwrap();
@@ -93,6 +99,7 @@ async fn refresh_caches() {
         if Instant::now() >= refresh_time
             && !REFRESHING_CACHE.compare_and_swap(false, true, Ordering::Relaxed)
         {
+            eprintln!("refreshing cache...");
             let start = Instant::now();
             if let (Ok(gen), Ok(ext)) = (GENERATION_DATA.read(), EXTERNAL_HTML.read()) {
                 let years = generate_years(&gen);
@@ -116,5 +123,13 @@ async fn refresh_caches() {
             );
             REFRESHING_CACHE.store(false, Ordering::Relaxed);
         }
-    })
+    });
+
+    // If the cache hasn't been initialized yet, wait for the refresh
+    // to run by `await`ing it.
+    if !CACHE_INITIALIZED.load(Ordering::Relaxed) {
+        if let Ok(_) = task.await {
+            CACHE_INITIALIZED.store(true, Ordering::Relaxed);
+        }
+    }
 }

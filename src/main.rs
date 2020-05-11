@@ -116,14 +116,7 @@ fn main() {
     let args = Args::from_args();
     log::set_verbosity(args.verbose);
 
-    // This is the part that actually generates the commit
-    // information, the rest is I/O. This is called again in the
-    // server code though.
-    let years = generate_years(&args.gen);
-
-    if args.stdout {
-        println!("{}", render::ascii(&years));
-    }
+    let mut stdout_years: Option<Vec<Year>> = None;
 
     if let Some(command) = &args.command {
         match command {
@@ -148,6 +141,8 @@ fn main() {
                     }
                 };
 
+                let years = generate_years(&args.gen);
+
                 let output_html = render::html(&args.ext, &html, css.as_ref(), &years);
                 write_to_file(&html, output_html, "html");
 
@@ -155,6 +150,8 @@ fn main() {
                     let output_css = render::css(&args.ext);
                     write_to_file(&css, output_css, "css");
                 }
+
+                stdout_years = Some(years);
             }
 
             #[cfg(feature = "server")]
@@ -164,6 +161,14 @@ fn main() {
             } => {
                 server::run(&args, *host, *cache_lifetime);
             }
+        }
+    } else {
+        stdout_years = Some(generate_years(&args.gen));
+    }
+
+    if args.stdout {
+        if let Some(years) = stdout_years {
+            println!("{}", render::ascii(&years));
         }
     }
 
