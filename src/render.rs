@@ -168,11 +168,11 @@ pub fn html(
     for year in years.iter().rev() {
         let max_count = get_max_count(year);
         result += &format!(
-            "<table class=\"activity-table\"><thead><tr><td class=\"activity-header-year\" colspan=\"{}\"><h3>{}</h3></td></tr></thead><tbody>\n",
-            WEEKS, year.year
+            "<div class=\"activity-table\" title=\"A table containing the commit visualization for {}.\">\n<div class=\"activity-header-year\" colspan=\"{}\">{}</div>\n <div>\n",
+            year.year, WEEKS, year.year
         );
         for day in 0..7 {
-            result += "<tr>";
+            result += "  <div class=\"blob-row\">";
             for week in 0..WEEKS {
                 let metadata = &year.days[day * WEEKS + week];
                 let commit_count = metadata.commits.len();
@@ -184,13 +184,13 @@ pub fn html(
                 };
                 let filler = if metadata.filler { "filler-day" } else { "" };
                 result += &format!(
-                    "<td class=\"blob lvl{} {}\" title=\"{}\"></td>",
+                    "<span class=\"blob lvl{} {}\" title=\"{}\"></span>",
                     shade, filler, tooltip
                 );
             }
-            result += "</tr>\n";
+            result += " </div>\n";
         }
-        result += "</tbody></table>\n";
+        result += " </div>\n</div>\n";
     }
     result += &tail;
     log::verbose_println("rendered html", false);

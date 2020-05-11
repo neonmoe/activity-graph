@@ -3,42 +3,60 @@ html {
     color: #444;
 }
 
-.activity-table {
-    width: auto;
+body {
+    width: 53em;
     margin: auto;
-    margin-bottom: 1em;
+    padding: 0;
+}
+
+.activity-table {
+    margin: 0;
+    margin-top: 2em;
+    margin-bottom: 2em;
 }
 
 .activity-header-year {
     text-align: center;
+    font-size: 1.25rem;
+    margin-top: 0.5em;
+}
+
+.blob-row {
+    height: 1em;
 }
 
 .blob {
-    width: 8px;
-    height: 8px;
-    border: solid #888 1px;
-    transition: border-color 0.2s;
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    margin: 0.1em;
+    padding: 0.1em;
+    opacity: 0.8;
 }
 
 .blob:hover {
-    border-color: #222;
+    opacity: 1.0;
+    padding: 0.15em;
+    margin: 0.05em;
 }
-
-.lvl0 { background-color: #fefefe; }
-.lvl1 { background-color: #e1e1f7; }
-.lvl2 { background-color: #c3c3ef; }
-.lvl3 { background-color: #a5a5e7; }
-.lvl4 { background-color: #8888de; }
 
 .filler-day {
-    opacity: 0.3;
+    opacity: 0.6;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .activity-blob {
-	transition: border-color 0s;
-    }
-}
+/* HSLuv source colors are in H/S/L form as comments. */
+
+.lvl0 { background-color: #dfe0ff; /* 265 / 100 / 90 */ }
+.lvl1 { background-color: #c0c1ff; /* 265 / 100 / 80 */ }
+.lvl2 { background-color: #a0a3ff; /* 265 / 100 / 70 */ }
+.lvl3 { background-color: #7f84ff; /* 265 / 100 / 60 */ }
+.lvl4 { background-color: #5c63ff; /* 265 / 100 / 50 */ }
+
+.filler-day.lvl0 { background-color: #eff0fe; /* 265 / 90 / 95 */ }
+.filler-day.lvl1 { background-color: #ecedfd; /* 265 / 90 / 94 */ }
+.filler-day.lvl2 { background-color: #e9e9fd; /* 265 / 90 / 93 */ }
+.filler-day.lvl3 { background-color: #e6e6fd; /* 265 / 90 / 92 */ }
+.filler-day.lvl4 { background-color: #e3e3fc; /* 265 / 90 / 91 */ }
 
 @media (prefers-color-scheme: dark) {
     html {
@@ -46,36 +64,38 @@ html {
 	color: #AAA;
     }
 
+    .lvl0 { background-color: #1b1b1b; /* 265 / 0 / 10 */ }
+    .lvl1 { background-color: #2e3035; /* 265 / 10 / 20 */ }
+    .lvl2 { background-color: #414752; /* 265 / 20 / 30 */ }
+    .lvl3 { background-color: #525f74; /* 265 / 30 / 40 */ }
+    .lvl4 { background-color: #62789a; /* 265 / 40 / 50 */ }
+
+    .filler-day.lvl0 { background-color: #111111; /* 265 / 0 / 5 */ }
+    .filler-day.lvl1 { background-color: #131314; /* 265 / 1 / 6 */ }
+    .filler-day.lvl2 { background-color: #151516; /* 265 / 2 / 7 */ }
+    .filler-day.lvl3 { background-color: #171818; /* 265 / 3 / 8 */ }
+    .filler-day.lvl4 { background-color: #191a1b; /* 265 / 4 / 9 */ }
+}
+
+@media (max-width: 58.89em) {
+    body {
+	width: 90vw;
+	margin: auto;
+    }
+
+    .blob-row {
+	height: 1.698vw;
+    }
+
     .blob {
-	border-color: #444;
+	width: 1.019vw;
+	height: 1.019vw;
+	margin: 0.17vw;
+	padding: 0.17vw;
     }
 
     .blob:hover {
-	border-color: #777;
-    }
-
-    .lvl0 { background-color: #1b1b1b; }
-    .lvl1 { background-color: #2e3034; }
-    .lvl2 { background-color: #404752; }
-    .lvl3 { background-color: #525e74; }
-    .lvl4 { background-color: #62789a; }
-
-    .filler-day {
-	opacity: 0.3;
+	padding: 0.15em;
+	margin: 0.05em;
     }
 }
-
-@media (max-width: 760px) {
-    .activity-table {
-	border-collapse: collapse;
-    }
-}
-
-@media (max-width: 600px) {
-    .blob {
-        width: 1.3vw;
-        height: 1.3vw;
-    }
-}
-
-@media (max-width: 400px) { .blob { border-width: 0.75px; } }
