@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -38,22 +39,22 @@ fn analyze_dir(
     if let Some(path) = path
         .canonicalize()
         .ok()
-        .map(|path| path.into_os_string())
+        .map(PathBuf::into_os_string)
         .and_then(|path| path.into_string().ok())
     {
         log::verbose_println(&format!("scanning: {}\r", path), true);
     }
 
-    let dirs: Vec<fs::DirEntry> = dirs.filter_map(|result| result.ok()).collect();
+    let dirs: Vec<fs::DirEntry> = dirs.filter_map(Result::ok).collect();
     if dirs
         .iter()
-        .map(|dir_entry| dir_entry.file_name())
+        .map(fs::DirEntry::file_name)
         .any(|file_name| file_name == ".git")
     {
         if let Some(name) = path
             .file_name()
-            .and_then(|os_str| os_str.to_str())
-            .map(|s| s.to_string())
+            .and_then(OsStr::to_str)
+            .map(ToString::to_string)
         {
             git_paths.insert(ProjectMetadata {
                 name,

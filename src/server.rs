@@ -14,8 +14,8 @@ use crate::{generate_years, log, render, Args, ExternalResources, GenerationData
 
 lazy_static::lazy_static! {
     // These are set before the server is run, and only used in responses
-    static ref GENERATION_DATA: RwLock<GenerationData> = RwLock::new(Default::default());
-    static ref EXTERNAL_HTML: RwLock<ExternalResources> = RwLock::new(Default::default());
+    static ref GENERATION_DATA: RwLock<GenerationData> = RwLock::new(GenerationData::default());
+    static ref EXTERNAL_HTML: RwLock<ExternalResources> = RwLock::new(ExternalResources::default());
     static ref LAST_CACHE: RwLock<Instant> = RwLock::new(Instant::now());
     static ref CACHE_LIFETIME: RwLock<Duration> = RwLock::new(Duration::from_secs(0));
 
@@ -127,9 +127,7 @@ async fn refresh_caches() {
 
     // If the cache hasn't been initialized yet, wait for the refresh
     // to run by `await`ing it.
-    if !CACHE_INITIALIZED.load(Ordering::Relaxed) {
-        if let Ok(_) = task.await {
-            CACHE_INITIALIZED.store(true, Ordering::Relaxed);
-        }
+    if !CACHE_INITIALIZED.load(Ordering::Relaxed) && task.await.is_ok() {
+        CACHE_INITIALIZED.store(true, Ordering::Relaxed);
     }
 }

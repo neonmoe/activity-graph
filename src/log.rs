@@ -15,10 +15,7 @@ pub fn set_verbosity(verbose: bool) {
 
 pub fn verbose_println(s: &str, updating_line: bool) {
     if VERBOSE.load(Ordering::Relaxed) {
-        let width = term_size::dimensions()
-            .map(|(w, _)| w - 1)
-            .unwrap_or(70)
-            .max(4);
+        let width = term_size::dimensions().map_or(70, |(w, _)| w - 1).max(4);
 
         if updating_line {
             // Throttle the line updates to once per 20ms, 50 Hz is plenty real-time.

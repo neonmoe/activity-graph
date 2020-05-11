@@ -38,16 +38,13 @@ pub fn find_dates(
     });
 
     #[cfg(feature = "rayon")]
-    let commit_dates = commit_dates.reduce(
-        || Vec::new(),
-        |mut a, b| {
-            a.extend(b);
-            a
-        },
-    );
+    let commit_dates = commit_dates.reduce(Vec::new, |mut a, b| {
+        a.extend(b);
+        a
+    });
     #[cfg(not(feature = "rayon"))]
     let commit_dates = commit_dates.fold(Vec::new(), |mut a, b| {
-        a.extend(&b);
+        a.extend(b);
         a
     });
 

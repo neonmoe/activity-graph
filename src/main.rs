@@ -1,4 +1,13 @@
-// TODO: Run clippy, and add a #warn for it
+// First, enable all the warnings.
+#![warn(clippy::all, clippy::pedantic)]
+// Then, disable the pedantic warnings I don't like.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::must_use_candidate
+)]
 
 use structopt::StructOpt;
 
@@ -30,7 +39,7 @@ pub struct Day {
 
 #[derive(Clone)]
 pub struct Year {
-    year: i32,
+    year: usize,
     days: Vec<Day>,
 }
 
@@ -124,7 +133,7 @@ fn main() {
         match command {
             CommandArgs::Generate { html, css } => {
                 let write_to_file = |path: &Path, s: String, name: &str| {
-                    let mut writer = File::create(path).map(|file| BufWriter::new(file));
+                    let mut writer = File::create(path).map(BufWriter::new);
                     match &mut writer {
                         Ok(writer) => {
                             if let Err(err) = writer.write(&s.as_bytes()) {

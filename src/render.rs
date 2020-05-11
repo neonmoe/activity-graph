@@ -5,7 +5,7 @@ use chrono::{DateTime, Datelike, Utc};
 
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::path::{Component, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::{log, Day, ExternalResources, ProjectMetadata, Year};
 
@@ -20,14 +20,14 @@ pub fn gather_years(mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>) -> 
 
     commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-    let get_year = |date: DateTime<Utc>| date.date().year();
+    let get_year = |date: DateTime<Utc>| date.date().year() as usize;
     let first_year = get_year(commit_dates[0].0);
     let last_year = get_year(commit_dates[commit_dates.len() - 1].0);
 
     // Years is a vec containing vecs of years, which consist
     // of weekday-major grids of days: eg. the first row
     // represents all of the mondays in the year, in order.
-    let mut years = Vec::with_capacity((last_year - first_year + 1) as usize);
+    let mut years = Vec::with_capacity(last_year - first_year + 1);
     for year in first_year..=last_year {
         years.push(Year {
             year,
@@ -40,14 +40,14 @@ pub fn gather_years(mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>) -> 
     for year in first_year..=last_year {
         // Loop through the years
 
-        let weekday_offset = NaiveDate::from_ymd(year, 1, 1)
+        let weekday_offset = NaiveDate::from_ymd(year as i32, 1, 1)
             .weekday()
             .num_days_from_monday() as usize;
         let last_day =
-            weekday_offset + NaiveDate::from_ymd(year + 1, 1, 1).pred().ordinal() as usize;
+            weekday_offset + NaiveDate::from_ymd(year as i32 + 1, 1, 1).pred().ordinal() as usize;
         let last_week = (last_day - (last_day % 7)) / 7;
 
-        let (before, after) = years.split_at_mut((year + 1 - first_year) as usize);
+        let (before, after) = years.split_at_mut(year - first_year + 1);
         let (before, current) = before.split_at_mut(before.len() - 1);
         let days = &mut current[0].days;
         let mut last_year_days = if year > first_year {
@@ -64,11 +64,11 @@ pub fn gather_years(mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>) -> 
             // Loop through the days until the commit is from
             // next year or commits run out
 
-            if date.year() != year {
+            if date.year() != year as i32 {
                 break;
             }
 
-            let ordinal_with_offset = (date.ordinal0()) as usize + weekday_offset;
+            let ordinal_with_offset = date.ordinal0() as usize + weekday_offset;
             let weekday_index = ordinal_with_offset % 7;
             let week_index = ordinal_with_offset / 7;
             if week_index < WEEKS {
@@ -146,7 +146,7 @@ pub fn html(
     if let (Some(base), Some(css_path)) = (html_path.parent(), &css_path) {
         if let Some(relative_path) = pathdiff::diff_paths(&css_path, base) {
             // Add the <link> element instead of <style> if using external css
-            let path = create_web_path(relative_path);
+            let path = create_web_path(&relative_path);
             style = Some(format!("<link href=\"{}\" rel=\"stylesheet\">", path));
         }
     }
@@ -226,7 +226,7 @@ pub fn ascii(years: &[Year]) -> String {
     result
 }
 
-fn create_web_path(path: PathBuf) -> String {
+fn create_web_path(path: &Path) -> String {
     path.components()
         .filter_map(|component| match component {
             Component::Normal(s) => s.to_str(),
@@ -235,7 +235,7 @@ fn create_web_path(path: PathBuf) -> String {
             _ => None,
         })
         .fold(String::new(), |mut a, b| {
-            if a.len() > 0 {
+            if a.is_empty() {
                 a += "/";
             }
             a += b;
