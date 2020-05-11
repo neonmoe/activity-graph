@@ -235,9 +235,6 @@ fn create_web_path(path: &Path) -> String {
             _ => None,
         })
         .fold(String::new(), |mut a, b| {
-            if a.is_empty() {
-                a += "/";
-            }
             a += b;
             a
         })

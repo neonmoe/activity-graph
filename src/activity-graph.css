@@ -60,8 +60,8 @@ body {
 
 @media (prefers-color-scheme: dark) {
     html {
-	background-color: #000;
-	color: #AAA;
+        background-color: #000;
+        color: #AAA;
     }
 
     .lvl0 { background-color: #1b1b1b; /* 265 / 0 / 10 */ }
@@ -79,23 +79,23 @@ body {
 
 @media (max-width: 58.89em) {
     body {
-	width: 90vw;
-	margin: auto;
+        width: 90vw;
+        margin: auto;
     }
 
     .blob-row {
-	height: 1.698vw;
+        height: 1.698vw;
     }
 
     .blob {
-	width: 1.019vw;
-	height: 1.019vw;
-	margin: 0.17vw;
-	padding: 0.17vw;
+        width: 1.019vw;
+        height: 1.019vw;
+        margin: 0.17vw;
+        padding: 0.17vw;
     }
 
     .blob:hover {
-	padding: 0.15em;
-	margin: 0.05em;
+        padding: 0.15em;
+        margin: 0.05em;
     }
 }

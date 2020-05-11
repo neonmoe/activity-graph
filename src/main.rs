@@ -50,16 +50,6 @@ pub struct Year {
 pub struct Args {
     #[structopt(subcommand)]
     command: Option<CommandArgs>,
-    /// Prints verbose information
-    #[structopt(short, long)]
-    verbose: bool,
-    /// Prints a visualization into stdout
-    #[structopt(long)]
-    stdout: bool,
-    #[structopt(flatten)]
-    gen: GenerationData,
-    #[structopt(flatten)]
-    ext: ExternalResources,
 }
 
 #[derive(StructOpt, Default, Clone)]
@@ -100,6 +90,13 @@ pub struct ExternalResources {
 enum CommandArgs {
     /// Output the generated html into a file
     Generate {
+        /// Prints verbose information
+        #[structopt(short, long)]
+        verbose: bool,
+        #[structopt(flatten)]
+        gen: GenerationData,
+        #[structopt(flatten)]
+        ext: ExternalResources,
         /// The file that the resulting html will be printed out to
         #[structopt(short = "o", long, default_value = "activity-graph.html")]
         html: PathBuf,
@@ -109,9 +106,25 @@ enum CommandArgs {
         css: Option<PathBuf>,
     },
 
+    /// Prints a visualization into stdout
+    Stdout {
+        /// Prints verbose information
+        #[structopt(short, long)]
+        verbose: bool,
+        #[structopt(flatten)]
+        gen: GenerationData,
+    },
+
     #[cfg(feature = "server")]
     /// Run a server that serves the generated activity graph html
     Server {
+        /// Prints verbose information
+        #[structopt(short, long)]
+        verbose: bool,
+        #[structopt(flatten)]
+        gen: GenerationData,
+        #[structopt(flatten)]
+        ext: ExternalResources,
         /// The address that the server is hosted on
         #[structopt(long, default_value = "127.0.0.1:80")]
         host: SocketAddr,
@@ -125,13 +138,18 @@ enum CommandArgs {
 fn main() {
     let start_time = time::Instant::now();
     let args = Args::from_args();
-    log::set_verbosity(args.verbose);
-
-    let stdout_years;
 
     if let Some(command) = &args.command {
         match command {
-            CommandArgs::Generate { html, css } => {
+            CommandArgs::Generate {
+                verbose,
+                gen,
+                ext,
+                html,
+                css,
+            } => {
+                log::set_verbosity(*verbose);
+
                 let write_to_file = |path: &Path, s: String, name: &str| {
                     let mut writer = File::create(path).map(BufWriter::new);
                     match &mut writer {
@@ -152,34 +170,34 @@ fn main() {
                     }
                 };
 
-                let years = generate_years(&args.gen);
+                let years = generate_years(&gen);
 
-                let output_html = render::html(&args.ext, &html, css.as_ref(), &years);
+                let output_html = render::html(&ext, &html, css.as_ref(), &years);
                 write_to_file(&html, output_html, "html");
 
                 if let Some(css) = css {
-                    let output_css = render::css(&args.ext);
+                    let output_css = render::css(&ext);
                     write_to_file(&css, output_css, "css");
                 }
+            }
 
-                stdout_years = years;
+            CommandArgs::Stdout { verbose, gen } => {
+                log::set_verbosity(*verbose);
+                println!("{}", render::ascii(&generate_years(gen)));
             }
 
             #[cfg(feature = "server")]
             CommandArgs::Server {
+                verbose,
+                gen,
+                ext,
                 host,
                 cache_lifetime,
             } => {
-                server::run(&args, *host, *cache_lifetime);
-                return;
+                log::set_verbosity(*verbose);
+                server::run(&gen, &ext, *host, *cache_lifetime);
             }
         }
-    } else {
-        stdout_years = generate_years(&args.gen);
-    }
-
-    if args.stdout {
-        println!("{}", render::ascii(&stdout_years));
     }
 
     log::verbose_println(

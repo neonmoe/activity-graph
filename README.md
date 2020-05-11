@@ -7,21 +7,21 @@ This program has 3 general use-cases:
 1. Printing out a nice visualization of your commits to stdout.
 
    ```
-   activity-graph -i <dirs-with-your-repos> --stdout
+   activity-graph stdout -i <dirs-with-your-repos>
    ```
 
 2. Generating a html file (and, optionally, a css file instead of a
    `<style>`) to be looked at / served via a file server.
 
    ```
-   activity-graph -i <dirs-with-your-repos> generate -o test.html [-c test.css]
+   activity-graph generate -i <dirs-with-your-repos> -o test.html [-c test.css]
    ```
 
 3. Serving the generated html and css straight from memory via
    [`hyper`][hyper]:
 
    ```
-   activity-graph -i <dirs-with-your-repos> server --host 0.0.0.0:80
+   activity-graph server -i <dirs-with-your-repos> --host 0.0.0.0:80
    ```
 
 ## Building
@@ -53,83 +53,14 @@ but those versions are what I wrote this with.
   `--cache-lifetime` parameter.
 
 ## License
+
 I recommend writing your own, it's a fun little project. But even
 though I would not recommend using this code, you may use it under the
 terms of the [GNU GPLv3 license][license].
 
 ## Usage
 
-You could just use the `--help` flag, but here you go.
-
-```
-activity-graph 0.1.0
-Jens Pitkanen <jens@neon.moe>
-Generates a visualization of your commit activity in a set of git repositories.
-
-USAGE:
-    activity-graph [FLAGS] [OPTIONS] [SUBCOMMAND]
-
-FLAGS:
-    -h, --help       Prints help information
-        --stdout     Prints a visualization into stdout
-    -V, --version    Prints version information
-    -v, --verbose    Prints verbose information
-
-OPTIONS:
-    -a, --author <author>                      Regex that matches the author(s) whose commits are being counted (if not
-                                               set, all commits will be counted)
-    -d, --depth <depth>                        How many subdirectories deep the program should search (if not set, there
-                                               is no limit)
-        --external-css <external-css>          A css file that will be pasted at the end of the css
-        --external-footer <external-footer>    A html file that will be pasted at the end of the <body> element
-        --external-head <external-head>        A html file that will be pasted in the <head> element
-        --external-header <external-header>    A html file that will be pasted at the beginning of the <body> element
-    -i, --input <input>...                     Path(s) to the directory (or directories) containing the repositories you
-                                               want to include
-
-SUBCOMMANDS:
-    generate    Output the generated html into a file
-    help        Prints this message or the help of the given subcommand(s)
-    server      Run a server that serves the generated activity graph html
-```
-
-The `generate` command:
-
-```
-activity-graph-generate 0.1.0
-Output the generated html into a file
-
-USAGE:
-    activity-graph generate [OPTIONS]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -c, --css <css>      The file that the stylesheet will be printed out to (if not set, it will be included in the
-                         html inside a style-element)
-    -o, --html <html>    The file that the resulting html will be printed out to [default: activity-graph.html]
-```
-
-The `server` command:
-
-```
-activity-graph-server 0.1.0
-Run a server that serves the generated activity graph html
-
-USAGE:
-    activity-graph server [OPTIONS]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-        --cache-lifetime <cache-lifetime>    The minimum amount of seconds between regenerating the html and css
-                                             [default: 1]
-        --host <host>                        The address that the server is hosted on [default: 127.0.0.1:80]
-```
+Run `activity-graph --help` for the manual.
 
 [hyper]: https://crates.io/crates/hyper "A fast HTTP 1/2 server written in Rust"
 [license]: LICENSE.md "The GNU GPLv3 license text in Markdown."

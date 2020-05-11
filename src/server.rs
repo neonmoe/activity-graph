@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use crate::{generate_years, log, render, Args, ExternalResources, GenerationData};
+use crate::{generate_years, log, render, ExternalResources, GenerationData};
 
 lazy_static::lazy_static! {
     // These are set before the server is run, and only used in responses
@@ -28,17 +28,17 @@ static CACHE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 static INDEX_PATHS: &[&str] = &["/", "/index.html", "/index.htm", ""];
 
-pub fn run(args: &Args, host: SocketAddr, cache_lifetime: u64) {
+pub fn run(gen: &GenerationData, ext: &ExternalResources, host: SocketAddr, cache_lifetime: u64) {
     log::verbose_println(&format!("starting server on {}...", host), true);
 
-    if let (Ok(mut gen), Ok(mut ext), Ok(mut lifetime), Ok(mut last_cache)) = (
+    if let (Ok(mut gen_), Ok(mut ext_), Ok(mut lifetime), Ok(mut last_cache)) = (
         GENERATION_DATA.write(),
         EXTERNAL_HTML.write(),
         CACHE_LIFETIME.write(),
         LAST_CACHE.write(),
     ) {
-        *gen = args.gen.clone();
-        *ext = args.ext.clone();
+        *gen_ = gen.clone();
+        *ext_ = ext.clone();
         *lifetime = Duration::from_secs(cache_lifetime);
         *last_cache = Instant::now() - Duration::from_secs(cache_lifetime * 2);
     } else {
