@@ -1,4 +1,5 @@
 use hyper::service::{make_service_fn, service_fn};
+use hyper::header::{HeaderValue, CONTENT_TYPE};
 use hyper::{Body, Request, Response, Server, StatusCode};
 use tokio::runtime::Runtime;
 use tokio::task;
@@ -64,17 +65,19 @@ pub fn run(gen: &GenerationData, ext: &ExternalResources, host: SocketAddr, cach
 }
 
 async fn handle(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-    let cache = if INDEX_PATHS.contains(&req.uri().path()) {
+    let (cache, mime_type) = if INDEX_PATHS.contains(&req.uri().path()) {
         refresh_caches().await;
-        CACHED_HTML.read()
+        (CACHED_HTML.read(), HeaderValue::from_static("text/html"))
     } else if req.uri() == "/activity-graph.css" {
         refresh_caches().await;
-        CACHED_CSS.read()
+        (CACHED_CSS.read(), HeaderValue::from_static("text/css"))
     } else {
         return Ok(error_response("404 Not Found", StatusCode::NOT_FOUND));
     };
     if let Ok(cache) = cache {
-        Ok(Response::new(Body::from(cache.clone())))
+        let mut response = Response::new(Body::from(cache.clone()));
+        response.headers_mut().insert(CONTENT_TYPE, mime_type);
+        Ok(response)
     } else {
         Ok(error_response(
             "500 Internal Server Error\nSorry, the server encountered an unexpected error.",
