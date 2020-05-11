@@ -14,7 +14,6 @@ html {
 }
 
 .blob {
-    background-color: #fff;
     width: 8px;
     height: 8px;
     border: solid #888 1px;
@@ -25,11 +24,15 @@ html {
     border-color: #222;
 }
 
-.lvl0 { background-color: #fff; }
+.lvl0 { background-color: #fefefe; }
 .lvl1 { background-color: #e1e1f7; }
 .lvl2 { background-color: #c3c3ef; }
 .lvl3 { background-color: #a5a5e7; }
 .lvl4 { background-color: #8888de; }
+
+.filler-day {
+    opacity: 0.3;
+}
 
 @media (prefers-reduced-motion: reduce) {
     .activity-blob {
@@ -44,7 +47,6 @@ html {
     }
 
     .blob {
-	background-color: #1b1b1b;
 	border-color: #444;
     }
 
@@ -57,6 +59,10 @@ html {
     .lvl2 { background-color: #404752; }
     .lvl3 { background-color: #525e74; }
     .lvl4 { background-color: #62789a; }
+
+    .filler-day {
+	opacity: 0.3;
+    }
 }
 
 @media (max-width: 760px) {
@@ -73,4 +79,3 @@ html {
 }
 
 @media (max-width: 400px) { .blob { border-width: 0.75px; } }
-@media (max-width: 200px) { .blob { border-width: 0px; } }

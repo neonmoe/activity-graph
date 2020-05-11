@@ -1,5 +1,6 @@
 //! Contains the functionality to render the visualizations out of
 //! dated commit data.
+use chrono::naive::NaiveDate;
 use chrono::{DateTime, Datelike, Utc};
 
 use std::fs::File;
@@ -12,11 +13,17 @@ static HTML_HEAD: &str = include_str!("head.html");
 static CSS: &str = include_str!("activity-graph.css");
 static WEEKS: usize = 53;
 
-pub fn gather_years(
-    commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>,
-    first_year: i32,
-    last_year: i32,
-) -> Vec<Year> {
+pub fn gather_years(mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)>) -> Vec<Year> {
+    if commit_dates.is_empty() {
+        return Vec::new();
+    }
+
+    commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    let get_year = |date: DateTime<Utc>| date.date().year();
+    let first_year = get_year(commit_dates[0].0);
+    let last_year = get_year(commit_dates[commit_dates.len() - 1].0);
+
     // Years is a vec containing vecs of years, which consist
     // of weekday-major grids of days: eg. the first row
     // represents all of the mondays in the year, in order.
@@ -28,26 +35,72 @@ pub fn gather_years(
         });
     }
 
-    let mut commit_dates = commit_dates.into_iter();
+    let mut commit_dates = commit_dates.into_iter().peekable();
     let mut counted_commits = 0;
     for year in first_year..=last_year {
         // Loop through the years
 
-        let days = &mut years[(year - first_year) as usize].days;
-        while let Some((date, metadata)) = commit_dates.next() {
+        let weekday_offset = NaiveDate::from_ymd(year, 1, 1)
+            .weekday()
+            .num_days_from_monday() as usize;
+        let last_day =
+            weekday_offset + NaiveDate::from_ymd(year + 1, 1, 1).pred().ordinal() as usize;
+        let last_week = (last_day - (last_day % 7)) / 7;
+
+        let (before, after) = years.split_at_mut((year + 1 - first_year) as usize);
+        let (before, current) = before.split_at_mut(before.len() - 1);
+        let days = &mut current[0].days;
+        let mut last_year_days = if year > first_year {
+            Some(&mut before[before.len() - 1].days)
+        } else {
+            None
+        };
+        let mut next_year_days = if year < last_year {
+            Some(&mut after[0].days)
+        } else {
+            None
+        };
+        while let Some((date, _)) = commit_dates.peek() {
             // Loop through the days until the commit is from
             // next year or commits run out
 
-            if date.iso_week().year() != year {
+            if date.year() != year {
                 break;
             }
-            let weekday_index = date.weekday().num_days_from_monday() as usize;
-            let week_index = date.iso_week().week0() as usize;
+
+            let ordinal_with_offset = (date.ordinal0()) as usize + weekday_offset;
+            let weekday_index = ordinal_with_offset % 7;
+            let week_index = ordinal_with_offset / 7;
             if week_index < WEEKS {
                 let day = &mut days[weekday_index * WEEKS + week_index];
-                day.commits.push(metadata);
-                counted_commits += 1;
+                // This branch should always be taken because of the peek()
+                if let Some((_, metadata)) = commit_dates.next() {
+                    // Add the commit to the next/last year as well,
+                    // to achieve consistency in the duplicated days
+                    if week_index == last_week {
+                        if let Some(days) = &mut next_year_days {
+                            let next_year_today = &mut days[weekday_index * WEEKS];
+                            next_year_today.commits.push(metadata.clone());
+                        }
+                    }
+                    if week_index == 0 {
+                        if let Some(days) = &mut last_year_days {
+                            let last_year_today = &mut days[weekday_index * WEEKS + WEEKS - 1];
+                            last_year_today.commits.push(metadata.clone());
+                        }
+                    }
+                    day.commits.push(metadata);
+                    counted_commits += 1;
+                }
             }
+        }
+
+        // Set the first and last days as filler
+        let first_day = weekday_offset;
+        for ordinal_with_offset in (0..first_day).chain(last_day..days.len()) {
+            let weekday_index = ordinal_with_offset % 7;
+            let week_index = ordinal_with_offset / 7;
+            days[weekday_index * WEEKS + week_index].filler = true;
         }
 
         log::verbose_println(
@@ -55,9 +108,23 @@ pub fn gather_years(
                 "prepared year {} for rendering, {} commits processed so far",
                 year, counted_commits
             ),
-            false,
+            true,
         );
     }
+
+    let year_range = if first_year == last_year {
+        format!(" {}", first_year)
+    } else {
+        format!("s {}-{}", first_year, last_year)
+    };
+    log::verbose_println(
+        &format!(
+            "prepared year{} for rendering, {} commits processed",
+            year_range, counted_commits
+        ),
+        false,
+    );
+
     years
 }
 
@@ -115,9 +182,10 @@ pub fn html(
                 } else {
                     format!("{} commits", commit_count)
                 };
+                let filler = if metadata.filler { "filler-day" } else { "" };
                 result += &format!(
-                    "<td class=\"blob lvl{}\" title=\"{}\"></td>",
-                    shade, tooltip
+                    "<td class=\"blob lvl{} {}\" title=\"{}\"></td>",
+                    shade, filler, tooltip
                 );
             }
             result += "</tr>\n";
@@ -144,8 +212,12 @@ pub fn ascii(years: &[Year]) -> String {
         for day in 0..7 {
             for week in 0..WEEKS {
                 let metadata = &year.days[day * WEEKS + week];
-                let shade = metadata.commits.len() as f32 / max_count as f32;
-                result.push(get_shaded_char(shade));
+                if metadata.filler {
+                    result.push(' ');
+                } else {
+                    let shade = metadata.commits.len() as f32 / max_count as f32;
+                    result.push(get_shaded_char(shade));
+                }
             }
             result.push('\n');
         }

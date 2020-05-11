@@ -1,4 +1,5 @@
-use chrono::{DateTime, Datelike, Utc};
+// TODO: Run clippy, and add a #warn for it
+
 use structopt::StructOpt;
 
 use std::fs::File;
@@ -23,6 +24,7 @@ pub struct ProjectMetadata {
 
 #[derive(Clone, Default)]
 pub struct Day {
+    filler: bool,
     commits: Vec<ProjectMetadata>,
 }
 
@@ -116,7 +118,7 @@ fn main() {
     let args = Args::from_args();
     log::set_verbosity(args.verbose);
 
-    let mut stdout_years: Option<Vec<Year>> = None;
+    let stdout_years;
 
     if let Some(command) = &args.command {
         match command {
@@ -151,7 +153,7 @@ fn main() {
                     write_to_file(&css, output_css, "css");
                 }
 
-                stdout_years = Some(years);
+                stdout_years = years;
             }
 
             #[cfg(feature = "server")]
@@ -160,16 +162,15 @@ fn main() {
                 cache_lifetime,
             } => {
                 server::run(&args, *host, *cache_lifetime);
+                return;
             }
         }
     } else {
-        stdout_years = Some(generate_years(&args.gen));
+        stdout_years = generate_years(&args.gen);
     }
 
     if args.stdout {
-        if let Some(years) = stdout_years {
-            println!("{}", render::ascii(&years));
-        }
+        println!("{}", render::ascii(&stdout_years));
     }
 
     log::verbose_println(
@@ -183,16 +184,6 @@ fn main() {
 
 pub fn generate_years(gen: &GenerationData) -> Vec<Year> {
     let repos = find_repositories::from_paths(&gen.input, gen.depth);
-
-    let mut commit_dates = commits::find_dates(gen.author.as_ref(), &repos);
-    commit_dates.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    if commit_dates.len() > 0 {
-        let get_year = |date: DateTime<Utc>| date.date().iso_week().year();
-        let first_year = get_year(commit_dates[0].0);
-        let last_year = get_year(commit_dates[commit_dates.len() - 1].0);
-        render::gather_years(commit_dates, first_year, last_year)
-    } else {
-        Vec::new()
-    }
+    let commit_dates = commits::find_dates(gen.author.as_ref(), &repos);
+    render::gather_years(commit_dates)
 }

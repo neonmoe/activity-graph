@@ -99,7 +99,7 @@ async fn refresh_caches() {
         if Instant::now() >= refresh_time
             && !REFRESHING_CACHE.compare_and_swap(false, true, Ordering::Relaxed)
         {
-            eprintln!("refreshing cache...");
+            log::verbose_println("refreshing cache...", false);
             let start = Instant::now();
             if let (Ok(gen), Ok(ext)) = (GENERATION_DATA.read(), EXTERNAL_HTML.read()) {
                 let years = generate_years(&gen);
