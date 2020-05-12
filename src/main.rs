@@ -87,12 +87,21 @@ pub struct ExternalResources {
 }
 
 #[derive(StructOpt)]
+pub struct Verbosity {
+    /// Prints verbose information
+    #[structopt(short, long)]
+    verbose: bool,
+    /// Disables all prints
+    #[structopt(short, long)]
+    quiet: bool,
+}
+
+#[derive(StructOpt)]
 enum CommandArgs {
     /// Output the generated html into a file
     Generate {
-        /// Prints verbose information
-        #[structopt(short, long)]
-        verbose: bool,
+        #[structopt(flatten)]
+        verbosity: Verbosity,
         #[structopt(flatten)]
         gen: GenerationData,
         #[structopt(flatten)]
@@ -108,9 +117,8 @@ enum CommandArgs {
 
     /// Prints a visualization into stdout
     Stdout {
-        /// Prints verbose information
-        #[structopt(short, long)]
-        verbose: bool,
+        #[structopt(flatten)]
+        verbosity: Verbosity,
         #[structopt(flatten)]
         gen: GenerationData,
     },
@@ -118,9 +126,8 @@ enum CommandArgs {
     #[cfg(feature = "server")]
     /// Run a server that serves the generated activity graph html
     Server {
-        /// Prints verbose information
-        #[structopt(short, long)]
-        verbose: bool,
+        #[structopt(flatten)]
+        verbosity: Verbosity,
         #[structopt(flatten)]
         gen: GenerationData,
         #[structopt(flatten)]
@@ -142,30 +149,30 @@ fn main() {
     if let Some(command) = &args.command {
         match command {
             CommandArgs::Generate {
-                verbose,
+                verbosity,
                 gen,
                 ext,
                 html,
                 css,
             } => {
-                log::set_verbosity(*verbose);
+                log::set_verbosity(verbosity);
 
                 let write_to_file = |path: &Path, s: String, name: &str| {
                     let mut writer = File::create(path).map(BufWriter::new);
                     match &mut writer {
                         Ok(writer) => {
                             if let Err(err) = writer.write(&s.as_bytes()) {
-                                eprintln!(
+                                log::println(&format!(
                                     "error: encountered while writing out the {}: {}",
                                     name, err
-                                );
+                                ));
                             }
                         }
                         Err(err) => {
-                            eprintln!(
+                            log::println(&format!(
                                 "error: encountered while creating the {} file: {}",
                                 name, err
-                            );
+                            ));
                         }
                     }
                 };
@@ -181,20 +188,20 @@ fn main() {
                 }
             }
 
-            CommandArgs::Stdout { verbose, gen } => {
-                log::set_verbosity(*verbose);
+            CommandArgs::Stdout { verbosity, gen } => {
+                log::set_verbosity(verbosity);
                 println!("{}", render::ascii(&generate_years(gen)));
             }
 
             #[cfg(feature = "server")]
             CommandArgs::Server {
-                verbose,
+                verbosity,
                 gen,
                 ext,
                 host,
                 cache_lifetime,
             } => {
-                log::set_verbosity(*verbose);
+                log::set_verbosity(verbosity);
                 server::run(&gen, &ext, *host, *cache_lifetime);
             }
         }

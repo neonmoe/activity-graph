@@ -4,15 +4,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::Verbosity;
+
 lazy_static::lazy_static! {
     static ref LAST_UPDATE_PRINT_TIME: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
 static LAST_PRINT_WAS_UPDATE: AtomicBool = AtomicBool::new(false);
 static VERBOSE: AtomicBool = AtomicBool::new(false);
+static QUIET: AtomicBool = AtomicBool::new(false);
 
-pub fn set_verbosity(verbose: bool) {
-    VERBOSE.store(verbose, Ordering::Relaxed);
+pub fn set_verbosity(verbosity: &Verbosity) {
+    VERBOSE.store(verbosity.verbose, Ordering::Relaxed);
+    QUIET.store(verbosity.quiet, Ordering::Relaxed);
+}
+
+pub fn println(s: &str) {
+    if !QUIET.load(Ordering::Relaxed) {
+        eprintln!("[{}] {}", timestamp(), s);
+    }
 }
 
 pub fn verbose_println(s: &str, updating_line: bool) {
@@ -45,8 +55,11 @@ pub fn verbose_println(s: &str, updating_line: bool) {
                     *last_update = None;
                 }
             }
-            let timestamp = Local::now().to_rfc3339_opts(SecondsFormat::Secs, true);
-            eprintln!("[{}] {}", timestamp, s);
+            eprintln!("[{}] {}", timestamp(), s);
         }
     }
+}
+
+fn timestamp() -> String {
+    Local::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }

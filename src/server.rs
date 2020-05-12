@@ -52,14 +52,14 @@ pub fn run(gen: &GenerationData, ext: &ExternalResources, host: SocketAddr, cach
                 let make_service =
                     make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle)) });
                 let server = Server::bind(&host).serve(make_service);
-                log::verbose_println(&format!("server started on {}", host), false);
+                log::println(&format!("server started on {}", host));
                 if let Err(err) = server.await {
-                    eprintln!("error: hyper server encountered an error: {}", err);
+                    log::println(&format!("error: hyper server encountered an error: {}", err));
                 }
             });
         }
         Err(err) => {
-            eprintln!("error: could not start tokio runtime: {}", err);
+            log::println(&format!("error: could not start tokio runtime: {}", err));
         }
     }
 }
@@ -120,9 +120,8 @@ async fn refresh_caches() {
                     *last_cache = Instant::now();
                 }
             }
-            log::verbose_println(
+            log::println(
                 &format!("updated cache, took {:?}", Instant::now() - start),
-                false,
             );
             REFRESHING_CACHE.store(false, Ordering::Relaxed);
             CACHE_INITIALIZED.store(true, Ordering::Relaxed);
