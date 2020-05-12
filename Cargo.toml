@@ -1,6 +1,6 @@
 [package]
 name = "activity-graph"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Jens Pitkanen <jens@neon.moe>"]
 edition = "2018"
 description = "Generates a visualization of your commit activity in a set of git repositories."

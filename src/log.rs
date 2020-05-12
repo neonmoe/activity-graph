@@ -1,3 +1,5 @@
+use chrono::{Local, SecondsFormat};
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -43,7 +45,8 @@ pub fn verbose_println(s: &str, updating_line: bool) {
                     *last_update = None;
                 }
             }
-            eprintln!("{}", s);
+            let timestamp = Local::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+            eprintln!("[{}] {}", timestamp, s);
         }
     }
 }

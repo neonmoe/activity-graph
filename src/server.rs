@@ -125,12 +125,13 @@ async fn refresh_caches() {
                 false,
             );
             REFRESHING_CACHE.store(false, Ordering::Relaxed);
+            CACHE_INITIALIZED.store(true, Ordering::Relaxed);
         }
     });
 
     // If the cache hasn't been initialized yet, wait for the refresh
     // to run by `await`ing it.
-    if !CACHE_INITIALIZED.load(Ordering::Relaxed) && task.await.is_ok() {
-        CACHE_INITIALIZED.store(true, Ordering::Relaxed);
+    if !CACHE_INITIALIZED.load(Ordering::Relaxed) {
+        let _ = task.await;
     }
 }
