@@ -143,6 +143,12 @@ enum CommandArgs {
         /// html and css
         #[structopt(long, default_value = "1")]
         cache_lifetime: u64,
+        /// A file that will be used as backup storage for the cache
+        /// (useful when you want to keep serving the previous cached
+        /// version after restarting the server, to avoid a period of
+        /// unresponsiveness)
+        #[structopt(long)]
+        cache_file: Option<PathBuf>,
     },
 }
 
@@ -150,7 +156,7 @@ fn main() {
     let start_time = time::Instant::now();
     let args = Args::from_args();
 
-    if let Some(command) = &args.command {
+    if let Some(command) = args.command {
         match command {
             CommandArgs::Generate {
                 verbosity,
@@ -159,7 +165,7 @@ fn main() {
                 html,
                 css,
             } => {
-                log::set_verbosity(verbosity);
+                log::set_verbosity(&verbosity);
 
                 let write_to_file = |path: &Path, s: String, name: &str| {
                     let mut writer = File::create(path).map(BufWriter::new);
@@ -193,8 +199,8 @@ fn main() {
             }
 
             CommandArgs::Stdout { verbosity, gen } => {
-                log::set_verbosity(verbosity);
-                println!("{}", render::ascii(&generate_years(gen)));
+                log::set_verbosity(&verbosity);
+                println!("{}", render::ascii(&generate_years(&gen)));
             }
 
             #[cfg(feature = "server")]
@@ -204,9 +210,10 @@ fn main() {
                 ext,
                 host,
                 cache_lifetime,
+                cache_file,
             } => {
-                log::set_verbosity(verbosity);
-                server::run(&gen, &ext, *host, *cache_lifetime);
+                log::set_verbosity(&verbosity);
+                server::run(&gen, &ext, cache_file, host, cache_lifetime);
             }
         }
     }
