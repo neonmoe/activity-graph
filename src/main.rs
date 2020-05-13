@@ -66,6 +66,10 @@ pub struct GenerationData {
     /// repositories you want to include
     #[structopt(short, long)]
     input: Vec<PathBuf>,
+    /// Should the git repositories be pulled before analysis
+    /// (warning: this will generally increase latency a lot)
+    #[structopt(long)]
+    pull: bool,
 }
 
 #[derive(StructOpt, Clone, Default)]
@@ -218,6 +222,6 @@ fn main() {
 
 pub fn generate_years(gen: &GenerationData) -> Vec<Year> {
     let repos = find_repositories::from_paths(&gen.input, gen.depth);
-    let commit_dates = commits::find_dates(gen.author.as_ref(), &repos);
+    let commit_dates = commits::find_dates(gen.author.as_ref(), gen.pull, &repos);
     render::gather_years(commit_dates)
 }

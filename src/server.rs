@@ -1,5 +1,5 @@
-use hyper::service::{make_service_fn, service_fn};
 use hyper::header::{HeaderValue, CONTENT_TYPE};
+use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server, StatusCode};
 use tokio::runtime::Runtime;
 use tokio::task;
@@ -54,7 +54,10 @@ pub fn run(gen: &GenerationData, ext: &ExternalResources, host: SocketAddr, cach
                 let server = Server::bind(&host).serve(make_service);
                 log::println(&format!("server started on {}", host));
                 if let Err(err) = server.await {
-                    log::println(&format!("error: hyper server encountered an error: {}", err));
+                    log::println(&format!(
+                        "error: hyper server encountered an error: {}",
+                        err
+                    ));
                 }
             });
         }
@@ -93,7 +96,7 @@ fn error_response(s: &'static str, status_code: StatusCode) -> Response<Body> {
 }
 
 async fn refresh_caches() {
-    let task = task::spawn_blocking(|| {
+    task::spawn_blocking(|| {
         let refresh_time = {
             let last_cache = LAST_CACHE.read().unwrap();
             let lifetime = CACHE_LIFETIME.read().unwrap();
@@ -120,17 +123,14 @@ async fn refresh_caches() {
                     *last_cache = Instant::now();
                 }
             }
-            log::println(
-                &format!("updated cache, took {:?}", Instant::now() - start),
-            );
+            log::println(&format!("updated cache, took {:?}", Instant::now() - start));
             REFRESHING_CACHE.store(false, Ordering::Relaxed);
             CACHE_INITIALIZED.store(true, Ordering::Relaxed);
         }
     });
 
-    // If the cache hasn't been initialized yet, wait for the refresh
-    // to run by `await`ing it.
-    if !CACHE_INITIALIZED.load(Ordering::Relaxed) {
-        let _ = task.await;
+    // Yield until the cache has been initialized
+    while !CACHE_INITIALIZED.load(Ordering::Relaxed) {
+        task::yield_now().await;
     }
 }

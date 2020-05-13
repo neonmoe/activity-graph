@@ -11,6 +11,7 @@ use crate::{log, ProjectMetadata};
 
 pub fn find_dates(
     author: Option<&String>,
+    pull: bool,
     repos: &HashSet<ProjectMetadata>,
 ) -> Vec<(DateTime<Utc>, ProjectMetadata)> {
     let commit_count = AtomicU32::new(0);
@@ -24,11 +25,17 @@ pub fn find_dates(
     let commit_dates = repo_iter.map(|repo| {
         let mut commit_dates: Vec<(DateTime<Utc>, ProjectMetadata)> = Vec::new();
         let path = &repo.path;
+
+        if pull {
+            run_git(&path, &["pull", "--all"]);
+        }
+
         let mut args = vec!["log", "--all", "--format=format:%ai", "--date=iso8601"];
         if let Some(author_flag) = &author_flag {
             args.push(author_flag);
         }
         let commits = run_git(&path, &args);
+
         for date in commits.lines().filter_map(|date| date.parse().ok()) {
             let count = commit_count.fetch_add(1, Ordering::Relaxed) + 1;
             log::verbose_println(&format!("commits accounted for {}\r", count), true);
