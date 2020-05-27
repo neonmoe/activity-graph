@@ -46,13 +46,13 @@ body {
 
 /* HSLuv source colors are in H/S/L form as comments. */
 
-.lvl0 { background-color: #dfe0ff; /* 265 / 100 / 90 */ }
+.lvl0 { background-color: #f5f6ff; /* 265 / 100 / 97 */ }
 .lvl1 { background-color: #c0c1ff; /* 265 / 100 / 80 */ }
 .lvl2 { background-color: #a0a3ff; /* 265 / 100 / 70 */ }
 .lvl3 { background-color: #7f84ff; /* 265 / 100 / 60 */ }
 .lvl4 { background-color: #5c63ff; /* 265 / 100 / 50 */ }
 
-.filler-day.lvl0 { background-color: #eff0fe; /* 265 / 90 / 95 */ }
+.filler-day.lvl0 { background-color: #f9f9fe; /* 265 / 90 / 98 */ }
 .filler-day.lvl1 { background-color: #ecedfd; /* 265 / 90 / 94 */ }
 .filler-day.lvl2 { background-color: #e9e9fd; /* 265 / 90 / 93 */ }
 .filler-day.lvl3 { background-color: #e6e6fd; /* 265 / 90 / 92 */ }
@@ -64,13 +64,13 @@ body {
         color: #AAA;
     }
 
-    .lvl0 { background-color: #1b1b1b; /* 265 / 0 / 10 */ }
+    .lvl0 { background-color: #131313; /* 265 / 0 / 6 */ }
     .lvl1 { background-color: #2e3035; /* 265 / 10 / 20 */ }
     .lvl2 { background-color: #414752; /* 265 / 20 / 30 */ }
     .lvl3 { background-color: #525f74; /* 265 / 30 / 40 */ }
     .lvl4 { background-color: #62789a; /* 265 / 40 / 50 */ }
 
-    .filler-day.lvl0 { background-color: #111111; /* 265 / 0 / 5 */ }
+    .filler-day.lvl0 { background-color: #0e0e0e; /* 265 / 0 / 4 */ }
     .filler-day.lvl1 { background-color: #131314; /* 265 / 1 / 6 */ }
     .filler-day.lvl2 { background-color: #151516; /* 265 / 2 / 7 */ }
     .filler-day.lvl3 { background-color: #171818; /* 265 / 3 / 8 */ }
